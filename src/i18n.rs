@@ -17,7 +17,7 @@ impl Language {
         }
     }
 
-    pub const fn tr(self, key: &'static str) -> &'static str {
+    pub fn tr(self, key: &'static str) -> &'static str {
         match (self, key) {
             (Self::French, "stopwatch") => "Chronomètre",
             (Self::English, "stopwatch") => "Stopwatch",
