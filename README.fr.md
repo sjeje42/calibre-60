@@ -34,9 +34,10 @@ La langue choisie est mémorisée entre les sessions.
 
 ## État du projet et téléchargements
 
-La [compilation automatique](../../actions/workflows/ci.yml) compile le programme
-et exécute les tests sous Debian 13 et Windows. Consulte le dernier lancement pour
-connaître son résultat réel.
+La [compilation automatique](../../actions/workflows/ci.yml) contrôle le formatage avec
+`rustfmt`, exécute **Clippy avec les avertissements traités comme des erreurs**, audite
+les dépendances avec `cargo-audit`, puis lance les tests et compile le programme sous
+Debian 13 et Windows. Consulte le dernier lancement pour connaître son résultat réel.
 
 Après une exécution réussie, les fichiers de développement restent disponibles dans
 la section **Artifacts** : `calibre-60-debian13-x64` et `calibre-60-windows-x64`.
@@ -48,10 +49,10 @@ un paquet **`.deb` Debian 13**, une archive **Linux x64 `.tar.gz`**, une archive
 correspondante. Le paquet Debian installe également l'icône et l'entrée du menu
 Applications via le fichier `.desktop`.
 
-La CI valide la compilation et les tests automatisés du moteur temporel et des
-statistiques. Elle ne peut pas valider complètement le matériel audio réel,
-l'affichage des notifications, l'intégration de la zone de notification de GNOME
-ou le comportement pendant la veille.
+La CI valide la qualité statique, l'audit des dépendances, la compilation et les tests
+automatisés du moteur temporel et des statistiques. Elle ne peut pas valider complètement
+le matériel audio réel, l'affichage des notifications, l'intégration de la zone de
+notification de GNOME ou le comportement pendant la veille.
 
 ## Compilation sous Debian 13
 
@@ -180,7 +181,8 @@ du programme. **Quitter** depuis la zone de notification termine réellement l'a
 
 | Fichier | Rôle |
 | --- | --- |
-| `src/main.rs` | État de l'application, commandes, raccourcis, préréglages et interface |
+| `src/main.rs` | Point d'entrée, configuration de la fenêtre et démarrage d'eframe |
+| `src/app.rs` | État de l'application, commandes, raccourcis, préréglages et interface |
 | `src/clock.rs` | Moteur temporel et tests unitaires déterministes |
 | `src/dial.rs` | Dessin vectoriel du chronographe |
 | `src/alarm.rs` | Fil d'exécution indépendant pour l'alarme sonore |
@@ -193,9 +195,10 @@ du programme. **Quitter** depuis la zone de notification termine réellement l'a
 | `assets/` | Icônes et ressources de distribution |
 
 ```bash
-cargo test
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets
 cargo build --release
-cargo fmt
 ```
 
 Les versions des dépendances directes sont fixées dans `Cargo.toml`.
