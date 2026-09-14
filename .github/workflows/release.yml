@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    name: Debian 13 package
+    runs-on: ubuntu-24.04
+    container: debian:13
+    timeout-minutes: 35
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git curl ca-certificates build-essential pkg-config dpkg-dev libasound2-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev
+      - uses: actions/checkout@v7
+      - name: Install stable Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/calibre-rustup.sh
+          sh /tmp/calibre-rustup.sh -y --profile minimal --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Test and build
+        run: |
+          cargo test --all-targets
+          cargo build --release
+      - name: Build Debian package
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          ROOT="dist/calibre-60_${VERSION}_amd64"
+          install -Dm755 target/release/calibre-60 "$ROOT/usr/bin/calibre-60"
+          install -Dm644 packaging/linux/calibre-60.desktop "$ROOT/usr/share/applications/calibre-60.desktop"
+          install -Dm644 assets/calibre-60.svg "$ROOT/usr/share/icons/hicolor/scalable/apps/calibre-60.svg"
+          install -Dm644 README.fr.md "$ROOT/usr/share/doc/calibre-60/README.fr.md"
+          install -Dm644 LICENSE "$ROOT/usr/share/doc/calibre-60/copyright"
+          mkdir -p "$ROOT/DEBIAN"
+          cat > "$ROOT/DEBIAN/control" <<EOF
+          Package: calibre-60
+          Version: ${VERSION}
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Maintainer: JérômeLab
+          Depends: libasound2t64, libxkbcommon0, libwayland-client0, libegl1, libgl1, libx11-6
+          Description: Native stopwatch and countdown timer
+           Calibre 60 is a native Rust stopwatch and countdown timer with an
+           analog chronograph dial, lap timing, configurable alarms and tray mode.
+          EOF
+          dpkg-deb --root-owner-group --build "$ROOT"
+          mv "${ROOT}.deb" "dist/calibre-60_${VERSION}_debian13_amd64.deb"
+          tar -C target/release -czf "dist/calibre-60_${VERSION}_linux-x64.tar.gz" calibre-60
+      - name: Upload Linux release files
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-linux
+          path: |
+            dist/*.deb
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64 package
+    runs-on: windows-2022
+    timeout-minutes: 35
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Test and build
+        run: |
+          cargo test --all-targets
+          cargo build --release
+      - name: Build Windows ZIP
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          New-Item -ItemType Directory -Force -Path dist, release-win | Out-Null
+          Copy-Item target/release/calibre-60.exe release-win/
+          Copy-Item README.md release-win/
+          Copy-Item LICENSE release-win/
+          Compress-Archive -Path release-win/* -DestinationPath "dist/calibre-60_${version}_windows-x64.zip"
+      - name: Upload Windows release files
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-windows
+          path: dist/*.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download release files
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag \
+            --generate-notes \
+            --title "Calibre 60 $GITHUB_REF_NAME"
