@@ -69,6 +69,8 @@ struct Calibre60 {
     tray_error: Option<String>,
     backgrounded: bool,
     quit_requested: bool,
+    compact_mode: bool,
+    normal_window_size: Option<Vec2>,
 }
 
 impl Calibre60 {
@@ -77,7 +79,7 @@ impl Calibre60 {
         visuals.override_text_color = Some(INK);
         visuals.panel_fill = PAPER;
         visuals.selection.bg_fill = ACCENT;
-        visuals.selection.stroke = Stroke::new(1.0, Color32::WHITE);
+        visuals.selection.stroke = Stroke::new(1.0_f32, Color32::WHITE);
         cc.egui_ctx.set_visuals(visuals);
 
         let mut style = (*cc.egui_ctx.style()).clone();
@@ -124,6 +126,8 @@ impl Calibre60 {
             tray_error,
             backgrounded: false,
             quit_requested: false,
+            compact_mode: false,
+            normal_window_size: None,
         }
     }
 
@@ -443,6 +447,107 @@ impl Calibre60 {
         }
     }
 
+    fn set_compact_mode(&mut self, ctx: &egui::Context, compact: bool) {
+        if compact == self.compact_mode {
+            return;
+        }
+
+        if compact {
+            self.normal_window_size =
+                ctx.input(|input| input.viewport().inner_rect.map(|rect| rect.size()));
+            ctx.send_viewport_cmd(egui::ViewportCommand::MinInnerSize(Vec2::new(360.0, 90.0)));
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::new(560.0, 110.0)));
+        } else {
+            ctx.send_viewport_cmd(egui::ViewportCommand::MinInnerSize(Vec2::new(440.0, 620.0)));
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(
+                self.normal_window_size
+                    .take()
+                    .unwrap_or_else(|| Vec2::new(620.0, 900.0)),
+            ));
+        }
+
+        self.compact_mode = compact;
+    }
+
+    fn compact_panel(&mut self, ctx: &egui::Context) {
+        let language = self.language;
+        let now = Instant::now();
+        let displayed = match self.mode {
+            Mode::Stopwatch => self.stopwatch.elapsed(now),
+            Mode::Countdown => self.countdown.remaining(self.target, now),
+        };
+        let time_color = if self.mode == Mode::Countdown && self.finished {
+            ACCENT
+        } else {
+            INK
+        };
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.add_space(10.0);
+            ui.horizontal_centered(|ui| {
+                ui.label(
+                    RichText::new(if self.mode == Mode::Stopwatch { "⏱" } else { "⏳" })
+                        .size(24.0),
+                );
+                ui.label(
+                    RichText::new(format_time(displayed))
+                        .monospace()
+                        .size(28.0)
+                        .color(time_color),
+                );
+
+                let action_label = if self.running() {
+                    language.tr("pause")
+                } else if self.mode == Mode::Countdown
+                    && self.countdown.elapsed(Instant::now()) >= self.target
+                    && !self.target.is_zero()
+                {
+                    language.tr("restart")
+                } else {
+                    language.tr("start_resume")
+                };
+                let can_start = self.mode == Mode::Stopwatch || !self.target.is_zero();
+                if ui
+                    .add_enabled(
+                        can_start,
+                        egui::Button::new(if self.running() { "⏸" } else { "▶" }),
+                    )
+                    .on_hover_text(action_label)
+                    .clicked()
+                {
+                    self.toggle();
+                }
+
+                if self.mode == Mode::Stopwatch
+                    && ui
+                        .add_enabled(
+                            self.stopwatch.running(),
+                            egui::Button::new(language.tr("lap")),
+                        )
+                        .clicked()
+                {
+                    self.lap();
+                }
+
+                if self.finished
+                    && ui
+                        .button("■")
+                        .on_hover_text(language.tr("stop_alarm"))
+                        .clicked()
+                {
+                    self.acknowledge();
+                }
+
+                if ui
+                    .button(format!("↗ {}", language.tr("normal_view")))
+                    .clicked()
+                {
+                    self.set_compact_mode(ctx, false);
+                }
+            });
+        });
+    }
+
     fn lap_list(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let language = self.language;
         ui.horizontal_wrapped(|ui| {
@@ -550,6 +655,14 @@ impl eframe::App for Calibre60 {
             if ctx.input(|i| i.key_pressed(egui::Key::R)) {
                 self.reset();
             }
+        }
+
+        if self.compact_mode {
+            self.compact_panel(ctx);
+            if self.stopwatch.running() || self.countdown.running() {
+                ctx.request_repaint_after(Duration::from_millis(16));
+            }
+            return;
         }
 
         let language = self.language;
@@ -702,6 +815,10 @@ impl eframe::App for Calibre60 {
                         .small()
                         .color(MUTED),
                     );
+
+                    if ui.button(language.tr("compact_mode")).clicked() {
+                        self.set_compact_mode(ctx, true);
+                    }
 
                     #[cfg(any(target_os = "linux", target_os = "windows"))]
                     if self.tray.is_some() {

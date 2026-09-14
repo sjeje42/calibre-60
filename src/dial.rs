@@ -46,7 +46,7 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
     );
     painter.circle_filled(center, radius * 1.07, INK);
     painter.circle_filled(center, radius * 1.025, PAPER);
-    painter.circle_stroke(center, radius * 0.985, Stroke::new(1.0, MUTED));
+    painter.circle_stroke(center, radius * 0.985, Stroke::new(1.0_f32, MUTED));
 
     // Alternating railway-style bezel.
     for index in 0..120 {
@@ -95,7 +95,7 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
     painter.circle_filled(
         sub_center, sub_radius, Color32::from_rgb(238, 235, 226),
     );
-    painter.circle_stroke(sub_center, sub_radius, Stroke::new(1.0, MUTED));
+    painter.circle_stroke(sub_center, sub_radius, Stroke::new(1.0_f32, MUTED));
 
     for index in 0..30 {
         painter.line_segment(

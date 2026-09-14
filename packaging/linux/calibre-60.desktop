@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Calibre 60
+Comment=Chronomètre et compte à rebours natif
+Comment[en]=Native stopwatch and countdown timer
+Exec=calibre-60
+Icon=calibre-60
+Terminal=false
+Categories=Utility;Clock;
+StartupNotify=true
+StartupWMClass=fr.jeromelab.calibre60
