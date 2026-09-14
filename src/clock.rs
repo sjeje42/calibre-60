@@ -14,7 +14,8 @@ impl Clock {
 
     pub fn elapsed(&self, now: Instant) -> Duration {
         self.accumulated
-            + self.started
+            + self
+                .started
                 .map(|start| now.saturating_duration_since(start))
                 .unwrap_or_default()
     }

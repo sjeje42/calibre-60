@@ -1,8 +1,9 @@
-use crate::Mode;
-use eframe::egui::{
-    self, Align2, Color32, FontId, Pos2, Sense, Stroke, Vec2,
+use crate::app::Mode;
+use eframe::egui::{self, Align2, Color32, FontId, Pos2, Sense, Stroke, Vec2};
+use std::{
+    f32::consts::{FRAC_PI_2, TAU},
+    time::Duration,
 };
-use std::{f32::consts::{FRAC_PI_2, TAU}, time::Duration};
 
 pub const PAPER: Color32 = Color32::from_rgb(248, 246, 240);
 pub const INK: Color32 = Color32::from_rgb(35, 39, 43);
@@ -32,8 +33,7 @@ fn draw_hand(
 }
 
 pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
-    let (response, painter) =
-        ui.allocate_painter(Vec2::splat(size), Sense::hover());
+    let (response, painter) = ui.allocate_painter(Vec2::splat(size), Sense::hover());
     let center = response.rect.center();
     let radius = size * 0.405;
     let scale = size / 520.0;
@@ -65,7 +65,13 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
     for index in 0..300 {
         let major = index % 25 == 0;
         let second = index % 5 == 0;
-        let inner = if major { 0.84 } else if second { 0.885 } else { 0.925 };
+        let inner = if major {
+            0.84
+        } else if second {
+            0.885
+        } else {
+            0.925
+        };
         painter.line_segment(
             [
                 radial(center, radius * inner, index as f64 / 300.0),
@@ -73,7 +79,11 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
             ],
             Stroke::new(
                 if major { 2.0 * scale } else { 0.8 * scale },
-                if second { INK } else { Color32::from_rgb(180, 177, 170) },
+                if second {
+                    INK
+                } else {
+                    Color32::from_rgb(180, 177, 170)
+                },
             ),
         );
     }
@@ -92,9 +102,7 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
     // The small counter makes one full revolution in 30 minutes.
     let sub_center = center - Vec2::new(0.0, radius * 0.44);
     let sub_radius = radius * 0.245;
-    painter.circle_filled(
-        sub_center, sub_radius, Color32::from_rgb(238, 235, 226),
-    );
+    painter.circle_filled(sub_center, sub_radius, Color32::from_rgb(238, 235, 226));
     painter.circle_stroke(sub_center, sub_radius, Stroke::new(1.0_f32, MUTED));
 
     for index in 0..30 {
@@ -123,8 +131,12 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
     }
 
     draw_hand(
-        &painter, sub_center, sub_radius * 0.77,
-        (seconds % 1800.0) / 1800.0, 2.0 * scale, INK,
+        &painter,
+        sub_center,
+        sub_radius * 0.77,
+        (seconds % 1800.0) / 1800.0,
+        2.0 * scale,
+        INK,
     );
     painter.circle_filled(sub_center, 3.0 * scale, INK);
 
@@ -155,8 +167,12 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
         Mode::Countdown => ACCENT,
     };
     draw_hand(
-        &painter, center, radius * 0.91,
-        (seconds % 60.0) / 60.0, 3.5 * scale, hand_color,
+        &painter,
+        center,
+        radius * 0.91,
+        (seconds % 60.0) / 60.0,
+        3.5 * scale,
+        hand_color,
     );
     painter.circle_filled(center, 8.0 * scale, hand_color);
     painter.circle_filled(center, 2.4 * scale, PAPER);

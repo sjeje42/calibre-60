@@ -1,8 +1,6 @@
 use crate::{clock::format_time, i18n::Language};
 use std::{
-    env,
-    fs,
-    io,
+    env, fs, io,
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -100,7 +98,10 @@ fn download_directory() -> Option<PathBuf> {
                 let Some(value) = line.strip_prefix("XDG_DOWNLOAD_DIR=") else {
                     continue;
                 };
-                let value = value.trim().trim_matches('"').replace("$HOME", &home.to_string_lossy());
+                let value = value
+                    .trim()
+                    .trim_matches('"')
+                    .replace("$HOME", &home.to_string_lossy());
                 if !value.is_empty() {
                     return Some(PathBuf::from(value));
                 }

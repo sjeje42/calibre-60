@@ -156,9 +156,7 @@ impl Alarm {
                     }
                     Ok(AudioCommand::Quit) | Err(RecvTimeoutError::Disconnected) => break,
                     Err(RecvTimeoutError::Timeout) => {
-                        let expired = deadline
-                            .map(|end| Instant::now() >= end)
-                            .unwrap_or(false);
+                        let expired = deadline.map(|end| Instant::now() >= end).unwrap_or(false);
                         if !expired {
                             continue;
                         }
@@ -227,11 +225,7 @@ fn start_preview(
     // The preview is deliberately short: it demonstrates the selected tone
     // without waiting through a long repetition interval.
     let samples = build_samples(config.tone, 600);
-    current.append(rodio::buffer::SamplesBuffer::new(
-        1,
-        SAMPLE_RATE,
-        samples,
-    ));
+    current.append(rodio::buffer::SamplesBuffer::new(1, SAMPLE_RATE, samples));
     Ok(current)
 }
 
@@ -248,12 +242,8 @@ fn build_samples(tone: AlarmTone, total_ms: u64) -> Vec<f32> {
 fn tone_sample(tone: AlarmTone, t: f32) -> f32 {
     match tone {
         AlarmTone::Classic => pulse(t, 0.0, 0.18, 880.0),
-        AlarmTone::DoubleBeep => {
-            pulse(t, 0.0, 0.12, 880.0) + pulse(t, 0.20, 0.32, 880.0)
-        }
-        AlarmTone::Chime => {
-            pulse(t, 0.0, 0.16, 659.25) + pulse(t, 0.18, 0.42, 987.77)
-        }
+        AlarmTone::DoubleBeep => pulse(t, 0.0, 0.12, 880.0) + pulse(t, 0.20, 0.32, 880.0),
+        AlarmTone::Chime => pulse(t, 0.0, 0.16, 659.25) + pulse(t, 0.18, 0.42, 987.77),
         AlarmTone::Digital => {
             pulse(t, 0.0, 0.09, 1_200.0)
                 + pulse(t, 0.13, 0.22, 1_600.0)

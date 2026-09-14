@@ -25,12 +25,7 @@ pub enum AlarmTone {
 }
 
 impl AlarmTone {
-    pub const ALL: [Self; 4] = [
-        Self::Classic,
-        Self::DoubleBeep,
-        Self::Chime,
-        Self::Digital,
-    ];
+    pub const ALL: [Self; 4] = [Self::Classic, Self::DoubleBeep, Self::Chime, Self::Digital];
 
     pub fn label(self, language: Language) -> &'static str {
         match self {
