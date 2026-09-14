@@ -1,0 +1,135 @@
+use eframe::egui;
+use std::sync::mpsc::{self, Receiver};
+use tray_icon::{
+    menu::{Menu, MenuEvent, MenuItem},
+    Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent,
+};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrayAction {
+    Open,
+    Toggle,
+    Quit,
+}
+
+pub struct SystemTray {
+    _icon: TrayIcon,
+    actions: Receiver<TrayAction>,
+}
+
+impl SystemTray {
+    pub fn new(ctx: egui::Context) -> Result<Self, String> {
+        let menu = Menu::new();
+        let open_item = MenuItem::new("Ouvrir Calibre 60", true, None);
+        let toggle_item = MenuItem::new("Marche / pause", true, None);
+        let quit_item = MenuItem::new("Quitter", true, None);
+
+        menu.append(&open_item)
+            .map_err(|error| format!("Menu de la zone de notification indisponible : {error}"))?;
+        menu.append(&toggle_item)
+            .map_err(|error| format!("Menu de la zone de notification indisponible : {error}"))?;
+        menu.append(&quit_item)
+            .map_err(|error| format!("Menu de la zone de notification indisponible : {error}"))?;
+
+        let icon = build_icon()?;
+        let tray_icon = TrayIconBuilder::new()
+            .with_menu(Box::new(menu))
+            .with_tooltip("Calibre 60 — JérômeLab")
+            .with_icon(icon)
+            .build()
+            .map_err(|error| format!("Zone de notification indisponible : {error}"))?;
+
+        let open_id = open_item.id().clone();
+        let toggle_id = toggle_item.id().clone();
+        let quit_id = quit_item.id().clone();
+
+        let (sender, actions) = mpsc::channel();
+
+        let menu_sender = sender.clone();
+        let menu_ctx = ctx.clone();
+        MenuEvent::set_event_handler(Some(move |event| {
+            let action = if event.id == open_id {
+                Some(TrayAction::Open)
+            } else if event.id == toggle_id {
+                Some(TrayAction::Toggle)
+            } else if event.id == quit_id {
+                Some(TrayAction::Quit)
+            } else {
+                None
+            };
+
+            if let Some(action) = action {
+                let _ = menu_sender.send(action);
+                menu_ctx.request_repaint();
+            }
+        }));
+
+        let tray_sender = sender;
+        TrayIconEvent::set_event_handler(Some(move |event| {
+            let open = matches!(
+                event,
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } | TrayIconEvent::DoubleClick {
+                    button: MouseButton::Left,
+                    ..
+                }
+            );
+
+            if open {
+                let _ = tray_sender.send(TrayAction::Open);
+                ctx.request_repaint();
+            }
+        }));
+
+        Ok(Self {
+            _icon: tray_icon,
+            actions,
+        })
+    }
+
+    pub fn try_action(&self) -> Option<TrayAction> {
+        self.actions.try_recv().ok()
+    }
+}
+
+fn build_icon() -> Result<Icon, String> {
+    const SIZE: u32 = 32;
+    let mut rgba = vec![0_u8; (SIZE * SIZE * 4) as usize];
+    let center = (SIZE as f32 - 1.0) / 2.0;
+
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            let dx = x as f32 - center;
+            let dy = y as f32 - center;
+            let distance = (dx * dx + dy * dy).sqrt();
+            let index = ((y * SIZE + x) * 4) as usize;
+
+            if distance <= 14.0 {
+                rgba[index] = 244;
+                rgba[index + 1] = 238;
+                rgba[index + 2] = 220;
+                rgba[index + 3] = 255;
+
+                if distance >= 12.4 {
+                    rgba[index] = 42;
+                    rgba[index + 1] = 37;
+                    rgba[index + 2] = 32;
+                }
+
+                if (x == 16 && y >= 7 && y <= 17)
+                    || (y == 16 && x >= 16 && x <= 23)
+                {
+                    rgba[index] = 178;
+                    rgba[index + 1] = 58;
+                    rgba[index + 2] = 47;
+                }
+            }
+        }
+    }
+
+    Icon::from_rgba(rgba, SIZE, SIZE)
+        .map_err(|error| format!("Icône de la zone de notification invalide : {error}"))
+}
