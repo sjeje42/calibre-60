@@ -15,6 +15,7 @@ The selected language is saved between sessions.
 
 - Independent stopwatch and countdown: switching tabs does not stop either clock.
 - Start, pause, resume, reset, and millisecond display.
+- Compact mode for keeping the timer and essential controls in a small corner of the screen.
 - Lap duration and cumulative time, newest lap first.
 - Lap analytics: best lap, slowest lap, and average lap time.
 - Copy lap data to the clipboard as semicolon-separated CSV.
@@ -27,17 +28,21 @@ The selected language is saved between sessions.
 - A separate alarm thread, independent of window repainting.
 - Persistent preferences, including language, presets, alarm settings, and last countdown duration.
 - Resizable, high-DPI-aware vector interface with keyboard shortcuts.
-- No account, web service, or image asset required at runtime.
+- No account or web service required at runtime.
 
 ## Status and downloads
 
 The [CI workflow](../../actions/workflows/ci.yml) builds and runs the unit tests on
 Debian 13 and Windows. Check the latest run for the actual validation result.
 
-After a successful run, download the corresponding artifact from its **Artifacts**
-section: `calibre-60-debian13-x64` or `calibre-60-windows-x64`.
+After a successful CI run, development builds remain available from the **Artifacts**
+section as `calibre-60-debian13-x64` and `calibre-60-windows-x64`.
 Access requires permission to this private repository.
-There is currently no installer or signed release package.
+
+When a `v*` tag is pushed, the release workflow automatically builds a **Debian 13
+`.deb` package**, a **Linux x64 `.tar.gz` archive**, and a **Windows x64 `.zip` archive**,
+generates **SHA-256 checksums**, and publishes the corresponding GitHub Release.
+The Debian package also installs the application icon and desktop-menu entry.
 
 CI validates compilation and automated timing/statistics tests. It does not fully
 validate desktop integration such as actual audio hardware, GNOME tray extensions,
@@ -117,6 +122,12 @@ automatically. **Restore defaults** returns them to 1, 3, 5, 10, and 25 minutes.
 When the countdown expires, Calibre 60 displays its visual warning, plays the selected
 alarm when sound is enabled, and sends a native desktop notification.
 
+### Compact mode
+
+Choose **Compact mode** to shrink the window to a small bar showing the current timer,
+time value, and essential controls. In stopwatch mode, **Lap** remains available while
+timing. **Normal view** restores the full chronograph and the previous window size.
+
 ### Background mode
 
 On Linux and Windows, **Run in background** sends Calibre 60 to the system tray.
@@ -166,6 +177,8 @@ not restored after the process exits. Choosing **Quit** from the tray terminates
 | `src/laps.rs` | Lap calculations and CSV export |
 | `src/i18n.rs` | French/English translations |
 | `src/settings.rs` | Persistent preferences |
+| `packaging/linux/` | Debian desktop-entry packaging files |
+| `assets/` | Distribution icons and assets |
 
 ```bash
 cargo test
