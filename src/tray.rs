@@ -130,7 +130,9 @@ fn build_icon(language: Language) -> Result<Icon, String> {
                     rgba[index + 2] = 32;
                 }
 
-                if (x == 16 && y >= 7 && y <= 17) || (y == 16 && x >= 16 && x <= 23) {
+                if (x == 16 && (7..=17).contains(&y))
+                    || (y == 16 && (16..=23).contains(&x))
+                {
                     rgba[index] = 178;
                     rgba[index + 1] = 58;
                     rgba[index + 2] = 47;
