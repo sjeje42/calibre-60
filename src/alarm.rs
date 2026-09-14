@@ -1,3 +1,4 @@
+use crate::notifications;
 use crate::settings::{
     AlarmTone, MAX_ALARM_REPEAT_MS, MIN_ALARM_REPEAT_MS,
 };
@@ -158,6 +159,7 @@ impl Alarm {
                             continue;
                         }
                         deadline = None;
+                        notifications::countdown_finished();
 
                         if let Some((_, handle)) = &audio {
                             match start_looping_alarm(handle, config, sound) {
