@@ -14,8 +14,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - name: Apply compact mode and release packaging
+      - name: Apply compact mode and packaging files
         run: python3 scripts/apply_points_8_9.py
+      - name: Keep workflow changes out of the bot commit
+        run: |
+          git checkout HEAD -- .github/workflows/apply-points-8-9.yml
+          rm -f .github/workflows/release.yml
       - name: Commit generated changes
         run: |
           git config user.name "Jérôme"
