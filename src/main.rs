@@ -3,17 +3,37 @@
 mod alarm;
 mod clock;
 mod dial;
+mod settings;
 
 use alarm::{Alarm, AudioCommand};
 use clock::{format_time, Clock};
 use dial::{draw_dial, ACCENT, INK, MUTED, PAPER};
 use eframe::egui::{self, Color32, RichText, Stroke, Vec2};
+use settings::{split_duration, Preferences, SavedMode};
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
     Stopwatch,
     Countdown,
+}
+
+impl From<SavedMode> for Mode {
+    fn from(mode: SavedMode) -> Self {
+        match mode {
+            SavedMode::Stopwatch => Self::Stopwatch,
+            SavedMode::Countdown => Self::Countdown,
+        }
+    }
+}
+
+impl From<Mode> for SavedMode {
+    fn from(mode: Mode) -> Self {
+        match mode {
+            Mode::Stopwatch => Self::Stopwatch,
+            Mode::Countdown => Self::Countdown,
+        }
+    }
 }
 
 struct Calibre60 {
@@ -43,17 +63,29 @@ impl Calibre60 {
         style.spacing.button_padding = Vec2::new(15.0, 10.0);
         cc.egui_ctx.set_style(style);
 
+        let preferences = Preferences::load(cc.storage);
+        let alarm = Alarm::new(cc.egui_ctx.clone());
+        alarm.send(AudioCommand::Sound(preferences.sound));
+
         Self {
-            mode: Mode::Stopwatch,
+            mode: preferences.mode.into(),
             stopwatch: Clock::default(),
             countdown: Clock::default(),
-            target: Duration::from_secs(300),
-            duration_fields: [0, 5, 0],
+            target: Duration::from_secs(preferences.countdown_seconds),
+            duration_fields: split_duration(preferences.countdown_seconds),
             laps: Vec::new(),
             finished: false,
-            sound: true,
-            alarm: Alarm::new(cc.egui_ctx.clone()),
+            sound: preferences.sound,
+            alarm,
             audio_error: None,
+        }
+    }
+
+    fn preferences(&self) -> Preferences {
+        Preferences {
+            mode: self.mode.into(),
+            sound: self.sound,
+            countdown_seconds: self.target.as_secs(),
         }
     }
 
@@ -382,13 +414,23 @@ impl eframe::App for Calibre60 {
             ctx.request_repaint_after(Duration::from_millis(16));
         }
     }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        self.preferences().save(storage);
+    }
+
+    fn auto_save_interval(&self) -> Duration {
+        Duration::from_secs(5)
+    }
 }
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
+            .with_app_id("fr.jeromelab.calibre60")
             .with_inner_size([620.0, 900.0])
             .with_min_inner_size([440.0, 620.0]),
+        persist_window: true,
         ..Default::default()
     };
     eframe::run_native(
