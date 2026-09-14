@@ -47,7 +47,7 @@ impl SystemTray {
 
         let menu_sender = sender.clone();
         let menu_ctx = ctx.clone();
-        MenuEvent::set_event_handler(Some(move |event| {
+        MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
             let action = if event.id == open_id {
                 Some(TrayAction::Open)
             } else if event.id == toggle_id {
@@ -65,7 +65,7 @@ impl SystemTray {
         }));
 
         let tray_sender = sender;
-        TrayIconEvent::set_event_handler(Some(move |event| {
+        TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
             let open = matches!(
                 event,
                 TrayIconEvent::Click {
