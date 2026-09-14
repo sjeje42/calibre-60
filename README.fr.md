@@ -16,6 +16,7 @@ La langue choisie est mémorisée entre les sessions.
 
 - Chronomètre et compte à rebours indépendants : changer d'onglet ne les arrête pas.
 - Démarrage, pause, reprise, remise à zéro et affichage des millisecondes.
+- Mode compact pour garder le temps et les commandes essentielles dans un coin de l'écran.
 - Temps de chaque tour et temps cumulé, avec les tours les plus récents en premier.
 - Statistiques des tours : meilleur tour, plus lent et moyenne.
 - Copie des tours dans le presse-papiers au format CSV, séparateur point-virgule.
@@ -37,10 +38,15 @@ La [compilation automatique](../../actions/workflows/ci.yml) compile le programm
 et exécute les tests sous Debian 13 et Windows. Consulte le dernier lancement pour
 connaître son résultat réel.
 
-Après une exécution réussie, les fichiers sont disponibles dans la section
-**Artifacts** : `calibre-60-debian13-x64` et `calibre-60-windows-x64`.
+Après une exécution réussie, les fichiers de développement restent disponibles dans
+la section **Artifacts** : `calibre-60-debian13-x64` et `calibre-60-windows-x64`.
 Le téléchargement nécessite l'accès à ce dépôt privé.
-Aucun installateur ni paquet de distribution signé n'est fourni pour l'instant.
+
+Lorsqu'un tag `v*` est poussé, le workflow de publication construit automatiquement
+un paquet **`.deb` Debian 13**, une archive **Linux x64 `.tar.gz`**, une archive
+**Windows x64 `.zip`**, génère les sommes **SHA-256**, puis crée la GitHub Release
+correspondante. Le paquet Debian installe également l'icône et l'entrée du menu
+Applications via le fichier `.desktop`.
 
 La CI valide la compilation et les tests automatisés du moteur temporel et des
 statistiques. Elle ne peut pas valider complètement le matériel audio réel,
@@ -124,6 +130,13 @@ enregistrées automatiquement. **Valeurs par défaut** remet 1, 3, 5, 10 et 25 m
 À la fin du compte à rebours, Calibre 60 affiche son alerte visuelle, joue la sonnerie
 sélectionnée si le son est actif et envoie une notification système native.
 
+### Mode compact
+
+Le bouton **Mode compact** réduit la fenêtre à une barre discrète affichant le type de
+minuteur, le temps courant et les commandes essentielles. En chronomètre, **Tour** reste
+disponible pendant la marche. Le bouton **Vue normale** restaure le grand cadran et la
+taille précédente de la fenêtre.
+
 ### Fonctionnement en arrière-plan
 
 Sous Linux et Windows, **Réduire en arrière-plan** envoie Calibre 60 dans la zone de
@@ -176,6 +189,8 @@ du programme. **Quitter** depuis la zone de notification termine réellement l'a
 | `src/laps.rs` | Calcul des statistiques de tours et export CSV |
 | `src/i18n.rs` | Traductions français/anglais |
 | `src/settings.rs` | Préférences persistantes |
+| `packaging/linux/` | Fichier `.desktop` du paquet Debian |
+| `assets/` | Icônes et ressources de distribution |
 
 ```bash
 cargo test
