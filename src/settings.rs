@@ -32,7 +32,7 @@ impl AlarmTone {
         Self::Digital,
     ];
 
-    pub const fn label(self, language: Language) -> &'static str {
+    pub fn label(self, language: Language) -> &'static str {
         match self {
             Self::Classic => language.tr("classic"),
             Self::DoubleBeep => language.tr("double_beep"),
