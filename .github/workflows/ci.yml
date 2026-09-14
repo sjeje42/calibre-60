@@ -1,0 +1,67 @@
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  debian:
+    name: Debian 13 (x64)
+    runs-on: ubuntu-24.04
+    container: debian:13
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git curl ca-certificates build-essential pkg-config libasound2-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev
+      - uses: actions/checkout@v4
+      - name: Install stable Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/calibre-rustup.sh
+          sh /tmp/calibre-rustup.sh -y --profile minimal --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Test timing engine
+        run: cargo test --all-targets
+      - name: Build release
+        run: cargo build --release
+      - name: Upload executable and resolved dependencies
+        uses: actions/upload-artifact@v4
+        with:
+          name: calibre-60-debian13-x64
+          path: |
+            target/release/calibre-60
+            Cargo.lock
+          if-no-files-found: error
+
+  windows:
+    name: Windows (x64, MSVC)
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Test timing engine
+        run: cargo test --all-targets
+      - name: Build release
+        run: cargo build --release
+      - name: Upload executable and resolved dependencies
+        uses: actions/upload-artifact@v4
+        with:
+          name: calibre-60-windows-x64
+          path: |
+            target/release/calibre-60.exe
+            Cargo.lock
+          if-no-files-found: error

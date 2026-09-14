@@ -1,0 +1,22 @@
+[package]
+name = "calibre-60"
+version = "0.1.0"
+edition = "2021"
+description = "Native Rust stopwatch and countdown timer with an analog chronograph dial"
+repository = "https://github.com/sjeje42/calibre-60"
+license-file = "LICENSE"
+publish = false
+
+[dependencies]
+eframe = { version = "=0.31.1", default-features = false, features = [
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
+rodio = { version = "=0.20.1", default-features = false }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true
