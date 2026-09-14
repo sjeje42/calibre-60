@@ -1,7 +1,6 @@
+use crate::i18n::Language;
 use crate::notifications;
-use crate::settings::{
-    AlarmTone, MAX_ALARM_REPEAT_MS, MIN_ALARM_REPEAT_MS,
-};
+use crate::settings::{AlarmTone, MAX_ALARM_REPEAT_MS, MIN_ALARM_REPEAT_MS};
 use eframe::egui;
 use rodio::{OutputStream, OutputStreamHandle, Sink, Source};
 use std::{
@@ -58,6 +57,7 @@ pub enum AudioCommand {
     Cancel,
     Sound(bool),
     Configure(AlarmConfig),
+    Language(Language),
     Test,
     Quit,
 }
@@ -70,7 +70,7 @@ pub struct Alarm {
 }
 
 impl Alarm {
-    pub fn new(ctx: egui::Context) -> Self {
+    pub fn new(ctx: egui::Context, initial_language: Language) -> Self {
         let (commands, receiver) = mpsc::channel();
         let (error_sender, errors) = mpsc::channel();
 
@@ -80,7 +80,8 @@ impl Alarm {
                 Ok(output) => Some(output),
                 Err(error) => {
                     let _ = error_sender.send(format!(
-                        "Sortie audio indisponible : {error}"
+                        "{}: {error}",
+                        initial_language.tr("audio_unavailable")
                     ));
                     ctx.request_repaint();
                     None
@@ -92,6 +93,7 @@ impl Alarm {
             let mut preview_sink: Option<Sink> = None;
             let mut sound = true;
             let mut config = AlarmConfig::default();
+            let mut language = initial_language;
 
             loop {
                 let wait = deadline
@@ -125,7 +127,7 @@ impl Alarm {
                         stop_sink(&mut alarm_sink);
                         if was_ringing {
                             if let Some((_, handle)) = &audio {
-                                match start_looping_alarm(handle, config, sound) {
+                                match start_looping_alarm(handle, config, sound, language) {
                                     Ok(current) => alarm_sink = Some(current),
                                     Err(error) => {
                                         let _ = error_sender.send(error);
@@ -135,11 +137,14 @@ impl Alarm {
                             }
                         }
                     }
+                    Ok(AudioCommand::Language(next)) => {
+                        language = next;
+                    }
                     Ok(AudioCommand::Test) => {
                         stop_sink(&mut preview_sink);
                         if sound {
                             if let Some((_, handle)) = &audio {
-                                match start_preview(handle, config, sound) {
+                                match start_preview(handle, config, sound, language) {
                                     Ok(current) => preview_sink = Some(current),
                                     Err(error) => {
                                         let _ = error_sender.send(error);
@@ -149,8 +154,7 @@ impl Alarm {
                             }
                         }
                     }
-                    Ok(AudioCommand::Quit)
-                    | Err(RecvTimeoutError::Disconnected) => break,
+                    Ok(AudioCommand::Quit) | Err(RecvTimeoutError::Disconnected) => break,
                     Err(RecvTimeoutError::Timeout) => {
                         let expired = deadline
                             .map(|end| Instant::now() >= end)
@@ -159,10 +163,10 @@ impl Alarm {
                             continue;
                         }
                         deadline = None;
-                        notifications::countdown_finished();
+                        notifications::countdown_finished(language);
 
                         if let Some((_, handle)) = &audio {
-                            match start_looping_alarm(handle, config, sound) {
+                            match start_looping_alarm(handle, config, sound, language) {
                                 Ok(current) => alarm_sink = Some(current),
                                 Err(error) => {
                                     let _ = error_sender.send(error);
@@ -200,9 +204,10 @@ fn start_looping_alarm(
     handle: &OutputStreamHandle,
     config: AlarmConfig,
     sound_enabled: bool,
+    language: Language,
 ) -> Result<Sink, String> {
     let current = Sink::try_new(handle)
-        .map_err(|error| format!("Lecture de l'alarme impossible : {error}"))?;
+        .map_err(|error| format!("{}: {error}", language.tr("alarm_playback_error")))?;
     current.set_volume(config.volume(sound_enabled));
     let samples = build_samples(config.tone, config.repeat_ms);
     let source = rodio::buffer::SamplesBuffer::new(1, SAMPLE_RATE, samples);
@@ -214,9 +219,10 @@ fn start_preview(
     handle: &OutputStreamHandle,
     config: AlarmConfig,
     sound_enabled: bool,
+    language: Language,
 ) -> Result<Sink, String> {
     let current = Sink::try_new(handle)
-        .map_err(|error| format!("Test de l'alarme impossible : {error}"))?;
+        .map_err(|error| format!("{}: {error}", language.tr("alarm_test_error")))?;
     current.set_volume(config.volume(sound_enabled));
     // The preview is deliberately short: it demonstrates the selected tone
     // without waiting through a long repetition interval.
