@@ -1,8 +1,11 @@
+use crate::i18n::Language;
 use serde::{Deserialize, Serialize};
 
 pub const MAX_COUNTDOWN_SECONDS: u64 = 99 * 3_600 + 59 * 60 + 59;
 pub const MIN_ALARM_REPEAT_MS: u64 = 500;
 pub const MAX_ALARM_REPEAT_MS: u64 = 5_000;
+pub const DEFAULT_PRESETS_MINUTES: [u64; 5] = [1, 3, 5, 10, 25];
+const MAX_PRESET_MINUTES: u64 = MAX_COUNTDOWN_SECONDS / 60;
 const STORAGE_KEY: &str = "calibre60.preferences";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,12 +32,12 @@ impl AlarmTone {
         Self::Digital,
     ];
 
-    pub const fn label(self) -> &'static str {
+    pub const fn label(self, language: Language) -> &'static str {
         match self {
-            Self::Classic => "Classique",
-            Self::DoubleBeep => "Double bip",
-            Self::Chime => "Carillon",
-            Self::Digital => "Numérique",
+            Self::Classic => language.tr("classic"),
+            Self::DoubleBeep => language.tr("double_beep"),
+            Self::Chime => language.tr("chime"),
+            Self::Digital => language.tr("digital"),
         }
     }
 }
@@ -48,6 +51,8 @@ pub struct Preferences {
     pub alarm_tone: AlarmTone,
     pub alarm_volume: u8,
     pub alarm_repeat_ms: u64,
+    pub language: Language,
+    pub presets_minutes: [u64; 5],
 }
 
 impl Default for Preferences {
@@ -59,6 +64,8 @@ impl Default for Preferences {
             alarm_tone: AlarmTone::Classic,
             alarm_volume: 35,
             alarm_repeat_ms: 1_000,
+            language: Language::French,
+            presets_minutes: DEFAULT_PRESETS_MINUTES,
         }
     }
 }
@@ -81,6 +88,9 @@ impl Preferences {
         self.alarm_repeat_ms = self
             .alarm_repeat_ms
             .clamp(MIN_ALARM_REPEAT_MS, MAX_ALARM_REPEAT_MS);
+        for preset in &mut self.presets_minutes {
+            *preset = (*preset).clamp(1, MAX_PRESET_MINUTES);
+        }
         self
     }
 }
@@ -107,6 +117,8 @@ mod tests {
         assert_eq!(preferences.alarm_tone, AlarmTone::Classic);
         assert_eq!(preferences.alarm_volume, 35);
         assert_eq!(preferences.alarm_repeat_ms, 1_000);
+        assert_eq!(preferences.language, Language::French);
+        assert_eq!(preferences.presets_minutes, [1, 3, 5, 10, 25]);
     }
 
     #[test]
@@ -120,11 +132,14 @@ mod tests {
         let preferences = Preferences {
             alarm_volume: 250,
             alarm_repeat_ms: 10,
+            presets_minutes: [0, 1, 3, 10, u64::MAX],
             ..Preferences::default()
         }
         .sanitized();
 
         assert_eq!(preferences.alarm_volume, 100);
         assert_eq!(preferences.alarm_repeat_ms, MIN_ALARM_REPEAT_MS);
+        assert_eq!(preferences.presets_minutes[0], 1);
+        assert_eq!(preferences.presets_minutes[4], MAX_PRESET_MINUTES);
     }
 }
