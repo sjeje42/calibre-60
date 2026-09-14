@@ -1,3 +1,4 @@
+use crate::i18n::Language;
 use eframe::egui;
 use std::sync::mpsc::{self, Receiver};
 use tray_icon::{
@@ -18,26 +19,29 @@ pub struct SystemTray {
 }
 
 impl SystemTray {
-    pub fn new(ctx: egui::Context) -> Result<Self, String> {
+    pub fn new(ctx: egui::Context, language: Language) -> Result<Self, String> {
         let menu = Menu::new();
-        let open_item = MenuItem::new("Ouvrir Calibre 60", true, None);
-        let toggle_item = MenuItem::new("Marche / pause", true, None);
-        let quit_item = MenuItem::new("Quitter", true, None);
+        let open_item = MenuItem::new(language.tr("tray_open"), true, None);
+        let toggle_item = MenuItem::new(language.tr("tray_toggle"), true, None);
+        let quit_item = MenuItem::new(language.tr("tray_quit"), true, None);
 
         menu.append(&open_item)
-            .map_err(|error| format!("Menu de la zone de notification indisponible : {error}"))?;
+            .map_err(|error| menu_error(language, error))?;
         menu.append(&toggle_item)
-            .map_err(|error| format!("Menu de la zone de notification indisponible : {error}"))?;
+            .map_err(|error| menu_error(language, error))?;
         menu.append(&quit_item)
-            .map_err(|error| format!("Menu de la zone de notification indisponible : {error}"))?;
+            .map_err(|error| menu_error(language, error))?;
 
-        let icon = build_icon()?;
+        let icon = build_icon(language)?;
         let tray_icon = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
             .with_tooltip("Calibre 60 — JérômeLab")
             .with_icon(icon)
             .build()
-            .map_err(|error| format!("Zone de notification indisponible : {error}"))?;
+            .map_err(|error| match language {
+                Language::French => format!("Zone de notification indisponible : {error}"),
+                Language::English => format!("System tray unavailable: {error}"),
+            })?;
 
         let open_id = open_item.id().clone();
         let toggle_id = toggle_item.id().clone();
@@ -95,7 +99,14 @@ impl SystemTray {
     }
 }
 
-fn build_icon() -> Result<Icon, String> {
+fn menu_error(language: Language, error: impl std::fmt::Display) -> String {
+    match language {
+        Language::French => format!("Menu de la zone de notification indisponible : {error}"),
+        Language::English => format!("System tray menu unavailable: {error}"),
+    }
+}
+
+fn build_icon(language: Language) -> Result<Icon, String> {
     const SIZE: u32 = 32;
     let mut rgba = vec![0_u8; (SIZE * SIZE * 4) as usize];
     let center = (SIZE as f32 - 1.0) / 2.0;
@@ -130,6 +141,8 @@ fn build_icon() -> Result<Icon, String> {
         }
     }
 
-    Icon::from_rgba(rgba, SIZE, SIZE)
-        .map_err(|error| format!("Icône de la zone de notification invalide : {error}"))
+    Icon::from_rgba(rgba, SIZE, SIZE).map_err(|error| match language {
+        Language::French => format!("Icône de la zone de notification invalide : {error}"),
+        Language::English => format!("Invalid system tray icon: {error}"),
+    })
 }
