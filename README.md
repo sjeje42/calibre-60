@@ -32,8 +32,10 @@ The selected language is saved between sessions.
 
 ## Status and downloads
 
-The [CI workflow](../../actions/workflows/ci.yml) builds and runs the unit tests on
-Debian 13 and Windows. Check the latest run for the actual validation result.
+The [CI workflow](../../actions/workflows/ci.yml) checks formatting with `rustfmt`, runs
+**Clippy with warnings treated as errors**, audits dependencies with `cargo-audit`, then
+runs tests and builds Calibre 60 on Debian 13 and Windows. Check the latest run for the
+actual validation result.
 
 After a successful CI run, development builds remain available from the **Artifacts**
 section as `calibre-60-debian13-x64` and `calibre-60-windows-x64`.
@@ -44,9 +46,9 @@ When a `v*` tag is pushed, the release workflow automatically builds a **Debian 
 generates **SHA-256 checksums**, and publishes the corresponding GitHub Release.
 The Debian package also installs the application icon and desktop-menu entry.
 
-CI validates compilation and automated timing/statistics tests. It does not fully
-validate desktop integration such as actual audio hardware, GNOME tray extensions,
-notification presentation, or suspend/resume behavior.
+CI validates static quality, the dependency audit, compilation, and automated
+timing/statistics tests. It does not fully validate desktop integration such as actual
+audio hardware, GNOME tray extensions, notification presentation, or suspend/resume behavior.
 
 ## Build on Debian 13
 
@@ -168,7 +170,8 @@ not restored after the process exits. Choosing **Quit** from the tray terminates
 
 | File | Purpose |
 | --- | --- |
-| `src/main.rs` | Application state, controls, shortcuts, presets, and UI |
+| `src/main.rs` | Entry point, window configuration, and eframe startup |
+| `src/app.rs` | Application state, controls, shortcuts, presets, and UI |
 | `src/clock.rs` | Timing engine and deterministic unit tests |
 | `src/dial.rs` | Vector chronograph drawing |
 | `src/alarm.rs` | Independent countdown sound worker |
@@ -181,9 +184,10 @@ not restored after the process exits. Choosing **Quit** from the tray terminates
 | `assets/` | Distribution icons and assets |
 
 ```bash
-cargo test
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets
 cargo build --release
-cargo fmt
 ```
 
 Direct dependency versions are pinned in `Cargo.toml`.
