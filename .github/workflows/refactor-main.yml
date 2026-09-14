@@ -1,0 +1,29 @@
+name: Refactor main module
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/refactor-main.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Refactor main.rs into app module
+        run: python3 scripts/refactor_main.py
+      - name: Format Rust sources
+        run: cargo fmt --all
+      - name: Keep workflow out of the generated commit
+        run: git checkout HEAD -- .github/workflows/refactor-main.yml
+      - name: Commit refactor
+        run: |
+          git config user.name "Jérôme"
+          git config user.email "58558882+sjeje42@users.noreply.github.com"
+          git add -A
+          git commit -m "Refactor application state out of main"
+          git push
