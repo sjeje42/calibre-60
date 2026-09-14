@@ -5,39 +5,43 @@
 English · [Français](README.fr.md)
 
 Calibre 60 combines an ivory dial, a sweeping seconds hand, a 30-minute subdial,
-and a digital hours/minutes/seconds/milliseconds display. Built for Linux
+and a digital hours/minutes/seconds/milliseconds display. It is built for Linux
 (including Debian 13) and Windows with egui/eframe and rodio.
 
-The application interface is currently **in French**. This README is the English
-user guide; an English interface is not implemented in this version.
+The application interface can be switched instantly between **French and English**.
+The selected language is saved between sessions.
 
 ## Features
 
 - Independent stopwatch and countdown: switching tabs does not stop either clock.
-- Start, pause, resume, and reset.
+- Start, pause, resume, reset, and millisecond display.
 - Lap duration and cumulative time, newest lap first.
-- Copy all recorded laps to the clipboard as semicolon-separated CSV.
-- Countdown settings up to 99 h 59 min 59 s and presets for 1, 3, 5, 10, or 25 minutes.
-- Repeating audible alarm, sound toggle, and a visible expiry message in either tab.
+- Lap analytics: best lap, slowest lap, and average lap time.
+- Copy lap data to the clipboard as semicolon-separated CSV.
+- Export lap data directly to a UTF-8 CSV file in the user's downloads folder.
+- Countdown up to 99 h 59 min 59 s.
+- Five persistent, customizable countdown presets; defaults are 1, 3, 5, 10, and 25 minutes.
+- Four alarm tones, volume control, repetition interval, sound preview, and mute toggle.
+- Native desktop notification when a countdown finishes.
+- Background/system-tray mode on Linux and Windows, with Open, Start/Pause, and Quit actions.
 - A separate alarm thread, independent of window repainting.
+- Persistent preferences, including language, presets, alarm settings, and last countdown duration.
 - Resizable, high-DPI-aware vector interface with keyboard shortcuts.
 - No account, web service, or image asset required at runtime.
 
 ## Status and downloads
 
-This is an initial source release. The [CI workflow](../../actions/workflows/ci.yml)
-builds and runs the timing unit tests on Debian 13 and Windows.
-Check the latest run for the actual validation result: the presence of a workflow
-does not mean the build has passed.
+The [CI workflow](../../actions/workflows/ci.yml) builds and runs the unit tests on
+Debian 13 and Windows. Check the latest run for the actual validation result.
 
 After a successful run, download the corresponding artifact from its **Artifacts**
 section: `calibre-60-debian13-x64` or `calibre-60-windows-x64`.
 Access requires permission to this private repository.
 There is currently no installer or signed release package.
 
-CI checks compilation and timing calculations. It does not validate the actual
-window, display scaling, clipboard, audio output, or device suspend behavior.
-These need testing on a desktop with a display and sound device.
+CI validates compilation and automated timing/statistics tests. It does not fully
+validate desktop integration such as actual audio hardware, GNOME tray extensions,
+notification presentation, or suspend/resume behavior.
 
 ## Build on Debian 13
 
@@ -72,8 +76,6 @@ To add it to your user executable directory after building:
 install -Dm755 target/release/calibre-60 "$HOME/.local/bin/calibre-60"
 ```
 
-Ensure `~/.local/bin` is on your PATH, then run `calibre-60` from a terminal.
-
 ## Build on Windows
 
 1. Install [Rust for Windows](https://rustup.rs/).
@@ -89,38 +91,39 @@ cargo build --release
 
 The executable is `target\release\calibre-60.exe`.
 Rust is needed for compilation, not for subsequently running the compiled app.
-CI builds with the MSVC toolchain on Windows Server 2022; actual desktop behavior
-still needs checking on your Windows installation.
 
 ## Using Calibre 60
 
-| French control | Meaning |
-| --- | --- |
-| Chronomètre | Stopwatch tab |
-| Compte à rebours | Countdown tab |
-| Démarrer / Reprendre | Start or resume the selected clock |
-| Pause | Pause the selected clock |
-| Tour | Record a lap while the stopwatch is running |
-| Réinitialiser | Reset the selected clock while stopped; also clears its laps |
-| Appliquer | Apply the edited duration and reset the countdown |
-| Relancer | Start the completed countdown again with the applied duration |
-| Copier CSV | Copy the recorded laps to the clipboard |
-| Son | Enable or mute the countdown sound |
-| Arrêter l’alarme | Acknowledge the countdown alarm |
+Use the **FR / EN** selector below the title to change the interface language.
+The choice is persistent and also updates alarm notifications and the system-tray menu.
 
-For a custom countdown, edit the duration **while stopped**, then click
-**Appliquer**. Editing the fields alone does not change the active duration.
-Applying a duration or choosing a preset discards the paused countdown progress.
-A zero-duration countdown cannot start.
+### Stopwatch
 
-The main hand completes one revolution every 60 seconds; the small hand completes
-one every 30 minutes. Both show the remaining duration in countdown mode and move
-backwards as that duration decreases. Read the digital display for the complete
-duration, including hours.
+Select **Stopwatch**, then **Start / Resume**. Press **Lap** to record intermediate
+times. The lap panel displays the best, slowest, and average lap automatically.
 
-Click **Copier CSV** and paste into a spreadsheet or text editor. The three
-columns are lap number, lap duration, and cumulative stopwatch time.
-CSV headers remain in French.
+**Copy CSV** copies the table to the clipboard. **Export CSV** saves a UTF-8 CSV file
+in the user's downloads directory. The export uses the currently selected interface
+language for its column headers.
+
+### Countdown
+
+Select **Countdown**, edit hours/minutes/seconds while stopped, then choose **Apply**.
+You can also use one of the five quick presets.
+
+Open **Customize presets** to edit the five preset durations. Values are saved
+automatically. **Restore defaults** returns them to 1, 3, 5, 10, and 25 minutes.
+
+When the countdown expires, Calibre 60 displays its visual warning, plays the selected
+alarm when sound is enabled, and sends a native desktop notification.
+
+### Background mode
+
+On Linux and Windows, **Run in background** sends Calibre 60 to the system tray.
+If a timer is running, closing the main window keeps the timer alive in the tray.
+The tray menu provides **Open Calibre 60**, **Start / pause**, and **Quit**.
+
+On GNOME, displaying tray icons may require an AppIndicator/KStatusNotifier extension.
 
 ## Keyboard shortcuts
 
@@ -129,40 +132,40 @@ Shortcuts apply when the app has focus and a duration input is not being edited.
 | Key | Action |
 | --- | --- |
 | Space | Start or pause the selected clock |
-| L | Record a lap in the stopwatch tab |
-| R | Reset the selected clock only when it is stopped |
+| L | Record a lap in stopwatch mode |
+| R | Reset the selected clock only when stopped |
 | Escape | Acknowledge an expired countdown alarm |
 
 ## Precision and lifecycle
 
-Timing uses Rust's [monotonic Instant clock](https://doc.rust-lang.org/std/time/struct.Instant.html),
-with integer durations. Elapsed time is calculated from timestamps rather than
-adding a fixed increment on each frame. A delayed repaint does not accumulate
-timing drift. Active rendering requests an update approximately every 16 ms;
-not every millisecond is rendered.
+Timing uses Rust's monotonic `Instant` clock. Elapsed time is calculated from
+timestamps rather than by adding a fixed increment on every frame, so delayed
+repaints do not accumulate timing drift. Active rendering requests an update about
+every 16 ms.
 
-A millisecond display is **not a guarantee of ±1 ms physical accuracy**.
-Input processing, OS scheduling, the hardware clock, and audio buffering affect
-observed response times. The alarm thread uses the countdown's absolute deadline,
-but cannot provide hard real-time audio delivery.
+A millisecond display is **not a guarantee of ±1 ms physical accuracy**. OS scheduling,
+hardware clocks, input processing, and audio buffering affect observed response times.
+The alarm worker uses the countdown's absolute deadline but is not a hard real-time system.
 
-Keep the computer awake for continuous timing. Suspend/resume treatment of
-`Instant` is platform-dependent; the app does not prevent sleep, wake the machine,
-or guarantee an alarm while it is suspended.
+The application does not prevent system sleep or wake a suspended computer. Suspend/resume
+behavior of monotonic clocks remains platform-dependent.
 
-Closing the app stops the alarm and discards timers, laps, and settings.
-There is no background service, system tray, or session persistence.
-If audio initialization fails, an error appears in the app and the visual alert
-remains available. Restart the app after fixing the audio output.
+Preferences are persisted, but active stopwatch/countdown progress and lap sessions are
+not restored after the process exits. Choosing **Quit** from the tray terminates the app.
 
 ## Development
 
 | File | Purpose |
 | --- | --- |
-| `src/main.rs` | Application state, controls, shortcuts, and lap display |
+| `src/main.rs` | Application state, controls, shortcuts, presets, and UI |
 | `src/clock.rs` | Timing engine and deterministic unit tests |
 | `src/dial.rs` | Vector chronograph drawing |
 | `src/alarm.rs` | Independent countdown sound worker |
+| `src/notifications.rs` | Native countdown-finished notification |
+| `src/tray.rs` | Linux/Windows system tray integration |
+| `src/laps.rs` | Lap calculations and CSV export |
+| `src/i18n.rs` | French/English translations |
+| `src/settings.rs` | Persistent preferences |
 
 ```bash
 cargo test
@@ -171,12 +174,7 @@ cargo fmt
 ```
 
 Direct dependency versions are pinned in `Cargo.toml`.
-Cargo generates `Cargo.lock` on the first build; it is intentionally not ignored.
-This initial source commit does not contain a generated lockfile.
-The Debian CI job uploads its generated lockfile alongside the executable.
-Commit a generated and validated lockfile to fix transitive dependency versions
-for future builds; the current CI resolves them independently on each platform.
 
 ## License
 
-See [LICENSE](LICENSE) for the existing GNU General Public License, version 3.
+See [LICENSE](LICENSE) for the GNU General Public License, version 3.
