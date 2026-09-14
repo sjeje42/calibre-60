@@ -5,11 +5,14 @@ mod clock;
 mod dial;
 mod settings;
 
-use alarm::{Alarm, AudioCommand};
+use alarm::{Alarm, AlarmConfig, AudioCommand};
 use clock::{format_time, Clock};
 use dial::{draw_dial, ACCENT, INK, MUTED, PAPER};
 use eframe::egui::{self, Color32, RichText, Stroke, Vec2};
-use settings::{split_duration, Preferences, SavedMode};
+use settings::{
+    split_duration, AlarmTone, Preferences, SavedMode, MAX_ALARM_REPEAT_MS,
+    MIN_ALARM_REPEAT_MS,
+};
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -45,6 +48,9 @@ struct Calibre60 {
     laps: Vec<Duration>,
     finished: bool,
     sound: bool,
+    alarm_tone: AlarmTone,
+    alarm_volume: u8,
+    alarm_repeat_ms: u64,
     alarm: Alarm,
     audio_error: Option<String>,
 }
@@ -65,6 +71,11 @@ impl Calibre60 {
 
         let preferences = Preferences::load(cc.storage);
         let alarm = Alarm::new(cc.egui_ctx.clone());
+        alarm.send(AudioCommand::Configure(AlarmConfig::new(
+            preferences.alarm_tone,
+            preferences.alarm_volume,
+            preferences.alarm_repeat_ms,
+        )));
         alarm.send(AudioCommand::Sound(preferences.sound));
 
         Self {
@@ -76,6 +87,9 @@ impl Calibre60 {
             laps: Vec::new(),
             finished: false,
             sound: preferences.sound,
+            alarm_tone: preferences.alarm_tone,
+            alarm_volume: preferences.alarm_volume,
+            alarm_repeat_ms: preferences.alarm_repeat_ms,
             alarm,
             audio_error: None,
         }
@@ -86,7 +100,18 @@ impl Calibre60 {
             mode: self.mode.into(),
             sound: self.sound,
             countdown_seconds: self.target.as_secs(),
+            alarm_tone: self.alarm_tone,
+            alarm_volume: self.alarm_volume,
+            alarm_repeat_ms: self.alarm_repeat_ms,
         }
+    }
+
+    fn sync_alarm_config(&self) {
+        self.alarm.send(AudioCommand::Configure(AlarmConfig::new(
+            self.alarm_tone,
+            self.alarm_volume,
+            self.alarm_repeat_ms,
+        )));
     }
 
     fn running(&self) -> bool {
@@ -219,16 +244,94 @@ impl Calibre60 {
 
         ui.label(
             RichText::new(format!("Durée appliquée : {}", format_time(self.target)))
-                .small().color(MUTED),
+                .small()
+                .color(MUTED),
         );
+    }
+
+    fn alarm_controls(&mut self, ui: &mut egui::Ui) {
+        egui::CollapsingHeader::new("Réglages de l’alarme")
+            .default_open(false)
+            .show(ui, |ui| {
+                let mut changed = false;
+
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("Sonnerie :");
+                    egui::ComboBox::from_id_salt("alarm_tone")
+                        .selected_text(self.alarm_tone.label())
+                        .show_ui(ui, |ui| {
+                            for tone in AlarmTone::ALL {
+                                changed |= ui
+                                    .selectable_value(
+                                        &mut self.alarm_tone,
+                                        tone,
+                                        tone.label(),
+                                    )
+                                    .changed();
+                            }
+                        });
+                });
+
+                let mut volume = u32::from(self.alarm_volume);
+                if ui
+                    .add(
+                        egui::Slider::new(&mut volume, 0..=100)
+                            .text("Volume")
+                            .suffix(" %"),
+                    )
+                    .changed()
+                {
+                    self.alarm_volume = volume as u8;
+                    changed = true;
+                }
+
+                let mut repeat_seconds = self.alarm_repeat_ms as f64 / 1_000.0;
+                if ui
+                    .add(
+                        egui::Slider::new(
+                            &mut repeat_seconds,
+                            MIN_ALARM_REPEAT_MS as f64 / 1_000.0
+                                ..=MAX_ALARM_REPEAT_MS as f64 / 1_000.0,
+                        )
+                        .step_by(0.25)
+                        .text("Répétition")
+                        .suffix(" s"),
+                    )
+                    .changed()
+                {
+                    self.alarm_repeat_ms = (repeat_seconds * 1_000.0).round() as u64;
+                    changed = true;
+                }
+
+                if changed {
+                    self.sync_alarm_config();
+                }
+
+                ui.horizontal_wrapped(|ui| {
+                    if ui
+                        .add_enabled(self.sound, egui::Button::new("Tester le son"))
+                        .clicked()
+                    {
+                        self.alarm.send(AudioCommand::Test);
+                    }
+                    if !self.sound {
+                        ui.label(
+                            RichText::new("Active « Son » pour tester.")
+                                .small()
+                                .color(MUTED),
+                        );
+                    }
+                });
+            });
     }
 
     fn lap_list(&self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.horizontal(|ui| {
             ui.label(RichText::new("TEMPS INTERMÉDIAIRES").strong());
-            if ui.add_enabled(
-                !self.laps.is_empty(), egui::Button::new("Copier CSV"),
-            ).clicked() {
+            if ui
+                .add_enabled(!self.laps.is_empty(), egui::Button::new("Copier CSV"))
+                .clicked()
+            {
                 self.copy_laps(ctx);
             }
         });
@@ -242,10 +345,12 @@ impl Calibre60 {
         }
 
         egui::ScrollArea::vertical()
-            .id_salt("laps").max_height(180.0)
+            .id_salt("laps")
+            .max_height(180.0)
             .show(ui, |ui| {
                 egui::Grid::new("lap_table")
-                    .striped(true).spacing([22.0, 8.0])
+                    .striped(true)
+                    .spacing([22.0, 8.0])
                     .show(ui, |ui| {
                         ui.strong("Tour");
                         ui.strong("Durée du tour");
@@ -293,121 +398,157 @@ impl eframe::App for Calibre60 {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical().id_salt("main").show(ui, |ui| {
-                ui.add_space(10.0);
-                ui.vertical_centered(|ui| {
-                    ui.label(RichText::new("CALIBRE 60").size(24.0).strong());
-                    ui.label(
-                        RichText::new("J É R Ô M E L A B")
-                            .size(11.0).color(MUTED),
-                    );
-                });
-                ui.add_space(10.0);
+            egui::ScrollArea::vertical()
+                .id_salt("main")
+                .show(ui, |ui| {
+                    ui.add_space(10.0);
+                    ui.vertical_centered(|ui| {
+                        ui.label(RichText::new("CALIBRE 60").size(24.0).strong());
+                        ui.label(
+                            RichText::new("J É R Ô M E L A B")
+                                .size(11.0)
+                                .color(MUTED),
+                        );
+                    });
+                    ui.add_space(10.0);
 
-                ui.horizontal_wrapped(|ui| {
-                    ui.selectable_value(&mut self.mode, Mode::Stopwatch, "Chronomètre");
-                    ui.selectable_value(&mut self.mode, Mode::Countdown, "Compte à rebours");
-                    if ui.checkbox(&mut self.sound, "Son").changed() {
-                        self.alarm.send(AudioCommand::Sound(self.sound));
-                    }
-                });
-                ui.separator();
-
-                // Countdown notifications remain visible in either tab.
-                if self.finished {
                     ui.horizontal_wrapped(|ui| {
-                        ui.label(RichText::new("TEMPS ÉCOULÉ").strong().color(ACCENT));
-                        if ui.button("Arrêter l’alarme").clicked() {
-                            self.acknowledge();
+                        ui.selectable_value(
+                            &mut self.mode,
+                            Mode::Stopwatch,
+                            "Chronomètre",
+                        );
+                        ui.selectable_value(
+                            &mut self.mode,
+                            Mode::Countdown,
+                            "Compte à rebours",
+                        );
+                        if ui.checkbox(&mut self.sound, "Son").changed() {
+                            self.alarm.send(AudioCommand::Sound(self.sound));
                         }
                     });
-                }
-
-                if self.mode == Mode::Countdown {
-                    self.duration_controls(ui);
                     ui.separator();
-                }
 
-                let now = Instant::now();
-                let displayed = match self.mode {
-                    Mode::Stopwatch => self.stopwatch.elapsed(now),
-                    Mode::Countdown => self.countdown.remaining(self.target, now),
-                };
-                let font_size = (ui.available_width() / 9.5).clamp(26.0, 56.0);
+                    // Countdown notifications remain visible in either tab.
+                    if self.finished {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(
+                                RichText::new("TEMPS ÉCOULÉ")
+                                    .strong()
+                                    .color(ACCENT),
+                            );
+                            if ui.button("Arrêter l’alarme").clicked() {
+                                self.acknowledge();
+                            }
+                        });
+                    }
 
-                ui.vertical_centered(|ui| {
+                    if self.mode == Mode::Countdown {
+                        self.duration_controls(ui);
+                        self.alarm_controls(ui);
+                        ui.separator();
+                    }
+
+                    let now = Instant::now();
+                    let displayed = match self.mode {
+                        Mode::Stopwatch => self.stopwatch.elapsed(now),
+                        Mode::Countdown => self.countdown.remaining(self.target, now),
+                    };
+                    let font_size = (ui.available_width() / 9.5).clamp(26.0, 56.0);
+
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            RichText::new(format_time(displayed))
+                                .monospace()
+                                .size(font_size)
+                                .color(
+                                    if self.mode == Mode::Countdown && self.finished {
+                                        ACCENT
+                                    } else {
+                                        INK
+                                    },
+                                ),
+                        );
+                        let status = if self.running() {
+                            "EN COURS"
+                        } else if self.mode == Mode::Countdown && self.finished {
+                            "TERMINÉ"
+                        } else {
+                            "À L’ARRÊT"
+                        };
+                        ui.label(RichText::new(status).size(11.0).color(MUTED));
+                        let size = ui.available_width().min(520.0);
+                        draw_dial(ui, size, displayed, self.mode);
+                    });
+
+                    ui.horizontal_wrapped(|ui| {
+                        let label = if self.running() {
+                            "Pause"
+                        } else if self.mode == Mode::Countdown
+                            && self.countdown.elapsed(Instant::now()) >= self.target
+                            && !self.target.is_zero()
+                        {
+                            "Relancer"
+                        } else {
+                            "Démarrer / Reprendre"
+                        };
+                        let can_start =
+                            self.mode == Mode::Stopwatch || !self.target.is_zero();
+                        if ui
+                            .add_enabled(
+                                can_start,
+                                egui::Button::new(
+                                    RichText::new(label).color(Color32::WHITE),
+                                )
+                                .fill(ACCENT),
+                            )
+                            .clicked()
+                        {
+                            self.toggle();
+                        }
+
+                        if self.mode == Mode::Stopwatch
+                            && ui
+                                .add_enabled(
+                                    self.stopwatch.running(),
+                                    egui::Button::new("Tour"),
+                                )
+                                .clicked()
+                        {
+                            self.lap();
+                        }
+
+                        if ui
+                            .add_enabled(
+                                !self.running(),
+                                egui::Button::new("Réinitialiser"),
+                            )
+                            .clicked()
+                        {
+                            self.reset();
+                        }
+                    });
+
+                    ui.add_space(5.0);
                     ui.label(
-                        RichText::new(format_time(displayed))
-                            .monospace().size(font_size)
-                            .color(if self.mode == Mode::Countdown && self.finished {
-                                ACCENT
-                            } else { INK }),
+                        RichText::new(
+                            "Espace : marche / pause · L : tour · R : remise à zéro à l’arrêt · Échap : alarme",
+                        )
+                        .small()
+                        .color(MUTED),
                     );
-                    let status = if self.running() {
-                        "EN COURS"
-                    } else if self.mode == Mode::Countdown && self.finished {
-                        "TERMINÉ"
-                    } else {
-                        "À L’ARRÊT"
-                    };
-                    ui.label(RichText::new(status).size(11.0).color(MUTED));
-                    let size = ui.available_width().min(520.0);
-                    draw_dial(ui, size, displayed, self.mode);
+
+                    if self.mode == Mode::Stopwatch {
+                        ui.separator();
+                        self.lap_list(ui, ctx);
+                    }
+                    if let Some(error) = &self.audio_error {
+                        ui.separator();
+                        ui.colored_label(ACCENT, error);
+                        ui.small("L’alerte visuelle reste disponible.");
+                    }
+                    ui.add_space(10.0);
                 });
-
-                ui.horizontal_wrapped(|ui| {
-                    let label = if self.running() {
-                        "Pause"
-                    } else if self.mode == Mode::Countdown
-                        && self.countdown.elapsed(Instant::now()) >= self.target
-                        && !self.target.is_zero()
-                    {
-                        "Relancer"
-                    } else {
-                        "Démarrer / Reprendre"
-                    };
-                    let can_start = self.mode == Mode::Stopwatch || !self.target.is_zero();
-                    if ui.add_enabled(
-                        can_start,
-                        egui::Button::new(RichText::new(label).color(Color32::WHITE))
-                            .fill(ACCENT),
-                    ).clicked() {
-                        self.toggle();
-                    }
-
-                    if self.mode == Mode::Stopwatch
-                        && ui.add_enabled(
-                            self.stopwatch.running(), egui::Button::new("Tour"),
-                        ).clicked()
-                    {
-                        self.lap();
-                    }
-
-                    if ui.add_enabled(
-                        !self.running(), egui::Button::new("Réinitialiser"),
-                    ).clicked() {
-                        self.reset();
-                    }
-                });
-
-                ui.add_space(5.0);
-                ui.label(
-                    RichText::new(
-                        "Espace : marche / pause · L : tour · R : remise à zéro à l’arrêt · Échap : alarme"
-                    ).small().color(MUTED),
-                );
-
-                if self.mode == Mode::Stopwatch {
-                    ui.separator();
-                    self.lap_list(ui, ctx);
-                }
-                if let Some(error) = &self.audio_error {
-                    ui.separator();
-                    ui.colored_label(ACCENT, error);
-                    ui.small("L’alerte visuelle reste disponible.");
-                }
-                ui.add_space(10.0);
-            });
         });
 
         if self.stopwatch.running() || self.countdown.running() {
