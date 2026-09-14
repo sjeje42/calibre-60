@@ -3,6 +3,8 @@
 mod alarm;
 mod clock;
 mod dial;
+mod i18n;
+mod laps;
 mod notifications;
 mod settings;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -11,10 +13,11 @@ mod tray;
 use alarm::{Alarm, AlarmConfig, AudioCommand};
 use clock::{format_time, Clock};
 use dial::{draw_dial, ACCENT, INK, MUTED, PAPER};
+use i18n::Language;
 use eframe::egui::{self, Color32, RichText, Stroke, Vec2};
 use settings::{
-    split_duration, AlarmTone, Preferences, SavedMode, MAX_ALARM_REPEAT_MS,
-    MIN_ALARM_REPEAT_MS,
+    split_duration, AlarmTone, Preferences, SavedMode, DEFAULT_PRESETS_MINUTES,
+    MAX_ALARM_REPEAT_MS, MIN_ALARM_REPEAT_MS,
 };
 use std::time::{Duration, Instant};
 #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -56,6 +59,9 @@ struct Calibre60 {
     alarm_tone: AlarmTone,
     alarm_volume: u8,
     alarm_repeat_ms: u64,
+    language: Language,
+    presets_minutes: [u64; 5],
+    export_message: Option<String>,
     alarm: Alarm,
     audio_error: Option<String>,
     #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -80,7 +86,7 @@ impl Calibre60 {
         cc.egui_ctx.set_style(style);
 
         let preferences = Preferences::load(cc.storage);
-        let alarm = Alarm::new(cc.egui_ctx.clone());
+        let alarm = Alarm::new(cc.egui_ctx.clone(), preferences.language);
         alarm.send(AudioCommand::Configure(AlarmConfig::new(
             preferences.alarm_tone,
             preferences.alarm_volume,
@@ -89,14 +95,12 @@ impl Calibre60 {
         alarm.send(AudioCommand::Sound(preferences.sound));
 
         #[cfg(any(target_os = "linux", target_os = "windows"))]
-        let (tray, tray_error) = match SystemTray::new(cc.egui_ctx.clone()) {
+        let (tray, tray_error) = match SystemTray::new(cc.egui_ctx.clone(), preferences.language) {
             Ok(tray) => (Some(tray), None),
             Err(error) => (None, Some(error)),
         };
         #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-        let tray_error = Some(String::from(
-            "La zone de notification n’est pas disponible sur cette plateforme.",
-        ));
+        let tray_error = Some(String::from(preferences.language.tr("tray_unavailable")));
 
         Self {
             mode: preferences.mode.into(),
@@ -110,6 +114,9 @@ impl Calibre60 {
             alarm_tone: preferences.alarm_tone,
             alarm_volume: preferences.alarm_volume,
             alarm_repeat_ms: preferences.alarm_repeat_ms,
+            language: preferences.language,
+            presets_minutes: preferences.presets_minutes,
+            export_message: None,
             alarm,
             audio_error: None,
             #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -128,6 +135,32 @@ impl Calibre60 {
             alarm_tone: self.alarm_tone,
             alarm_volume: self.alarm_volume,
             alarm_repeat_ms: self.alarm_repeat_ms,
+            language: self.language,
+            presets_minutes: self.presets_minutes,
+        }
+    }
+
+    fn set_language(&mut self, ctx: &egui::Context, language: Language) {
+        self.language = language;
+        self.alarm.send(AudioCommand::Language(language));
+        self.audio_error = None;
+
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        {
+            match SystemTray::new(ctx.clone(), language) {
+                Ok(tray) => {
+                    self.tray = Some(tray);
+                    self.tray_error = None;
+                }
+                Err(error) => {
+                    self.tray = None;
+                    self.tray_error = Some(error);
+                }
+            }
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+        {
+            self.tray_error = Some(String::from(language.tr("tray_unavailable")));
         }
     }
 
@@ -223,24 +256,14 @@ impl Calibre60 {
     }
 
     fn copy_laps(&self, ctx: &egui::Context) {
-        let mut csv = String::from("Tour;Duree du tour;Temps cumule\n");
-        let mut previous = Duration::ZERO;
-        for (index, &total) in self.laps.iter().enumerate() {
-            csv.push_str(&format!(
-                "{};{};{}\n",
-                index + 1,
-                format_time(total.saturating_sub(previous)),
-                format_time(total)
-            ));
-            previous = total;
-        }
-        ctx.copy_text(csv);
+        ctx.copy_text(laps::csv(&self.laps, self.language));
     }
 
     fn duration_controls(&mut self, ui: &mut egui::Ui) {
+        let language = self.language;
         ui.add_enabled_ui(!self.countdown.running(), |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.label("Durée :");
+                ui.label(language.tr("duration"));
                 for (index, suffix, maximum) in [
                     (0, " h", 99_u64),
                     (1, " min", 59_u64),
@@ -252,45 +275,81 @@ impl Calibre60 {
                             .suffix(suffix),
                     );
                 }
-                if ui.button("Appliquer").clicked() {
+                if ui.button(language.tr("apply")).clicked() {
                     self.apply_duration();
                 }
             });
 
+            let presets = self.presets_minutes;
             ui.horizontal_wrapped(|ui| {
-                for minutes in [1_u64, 3, 5, 10, 25] {
-                    if ui.button(format!("{minutes} min")).clicked() {
-                        self.duration_fields = [0, minutes, 0];
+                for minutes in presets {
+                    let label = if minutes < 60 {
+                        format!("{minutes} min")
+                    } else if minutes % 60 == 0 {
+                        format!("{} h", minutes / 60)
+                    } else {
+                        format!("{} h {:02}", minutes / 60, minutes % 60)
+                    };
+                    if ui.button(label).clicked() {
+                        self.duration_fields = [minutes / 60, minutes % 60, 0];
                         self.apply_duration();
                     }
                 }
             });
+
+            egui::CollapsingHeader::new(language.tr("custom_presets"))
+                .default_open(false)
+                .show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        for (index, preset) in self.presets_minutes.iter_mut().enumerate() {
+                            ui.label(format!("{} {}", language.tr("preset"), index + 1));
+                            ui.add(
+                                egui::DragValue::new(preset)
+                                    .range(1..=5_999_u64)
+                                    .suffix(format!(" {}", language.tr("minutes_short"))),
+                            );
+                        }
+                    });
+                    if ui.button(language.tr("restore_presets")).clicked() {
+                        self.presets_minutes = DEFAULT_PRESETS_MINUTES;
+                    }
+                    ui.label(
+                        RichText::new(language.tr("presets_autosaved"))
+                            .small()
+                            .color(MUTED),
+                    );
+                });
         });
 
         ui.label(
-            RichText::new(format!("Durée appliquée : {}", format_time(self.target)))
-                .small()
-                .color(MUTED),
+            RichText::new(format!(
+                "{} : {}",
+                language.tr("applied_duration"),
+                format_time(self.target)
+            ))
+            .small()
+            .color(MUTED),
         );
     }
 
     fn alarm_controls(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new("Réglages de l’alarme")
+        let language = self.language;
+        egui::CollapsingHeader::new(language.tr("alarm_settings"))
             .default_open(false)
             .show(ui, |ui| {
                 let mut changed = false;
 
                 ui.horizontal_wrapped(|ui| {
-                    ui.label("Sonnerie :");
+                    ui.label(language.tr("ringtone"));
                     egui::ComboBox::from_id_salt("alarm_tone")
-                        .selected_text(self.alarm_tone.label())
+                        .selected_text(self.alarm_tone.label(language))
                         .show_ui(ui, |ui| {
                             for tone in AlarmTone::ALL {
                                 changed |= ui
                                     .selectable_value(
                                         &mut self.alarm_tone,
                                         tone,
-                                        tone.label(),
+                                        tone.label(language),
                                     )
                                     .changed();
                             }
@@ -301,7 +360,7 @@ impl Calibre60 {
                 if ui
                     .add(
                         egui::Slider::new(&mut volume, 0..=100)
-                            .text("Volume")
+                            .text(language.tr("volume"))
                             .suffix(" %"),
                     )
                     .changed()
@@ -319,7 +378,7 @@ impl Calibre60 {
                                 ..=MAX_ALARM_REPEAT_MS as f64 / 1_000.0,
                         )
                         .step_by(0.25)
-                        .text("Répétition")
+                        .text(language.tr("repeat"))
                         .suffix(" s"),
                     )
                     .changed()
@@ -334,14 +393,14 @@ impl Calibre60 {
 
                 ui.horizontal_wrapped(|ui| {
                     if ui
-                        .add_enabled(self.sound, egui::Button::new("Tester le son"))
+                        .add_enabled(self.sound, egui::Button::new(language.tr("test_sound")))
                         .clicked()
                     {
                         self.alarm.send(AudioCommand::Test);
                     }
                     if !self.sound {
                         ui.label(
-                            RichText::new("Active « Son » pour tester.")
+                            RichText::new(language.tr("enable_sound_test"))
                                 .small()
                                 .color(MUTED),
                         );
@@ -384,23 +443,45 @@ impl Calibre60 {
         }
     }
 
-    fn lap_list(&self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("TEMPS INTERMÉDIAIRES").strong());
+    fn lap_list(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let language = self.language;
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(language.tr("laps_title")).strong());
             if ui
-                .add_enabled(!self.laps.is_empty(), egui::Button::new("Copier CSV"))
+                .add_enabled(!self.laps.is_empty(), egui::Button::new(language.tr("copy_csv")))
                 .clicked()
             {
                 self.copy_laps(ctx);
+                self.export_message = None;
+            }
+            if ui
+                .add_enabled(!self.laps.is_empty(), egui::Button::new(language.tr("export_csv")))
+                .clicked()
+            {
+                self.export_message = Some(match laps::export_csv(&self.laps, language) {
+                    Ok(path) => format!("{} : {}", language.tr("export_ok"), path.display()),
+                    Err(error) => format!("{} : {error}", language.tr("export_error")),
+                });
             }
         });
 
         if self.laps.is_empty() {
-            ui.label(
-                RichText::new("Appuie sur « Tour » pendant le chronométrage.")
-                    .color(MUTED),
-            );
+            ui.label(RichText::new(language.tr("lap_hint")).color(MUTED));
             return;
+        }
+
+        if let Some(stats) = laps::stats(&self.laps) {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(format!("{} : {}", language.tr("best"), format_time(stats.best)));
+                ui.separator();
+                ui.label(format!("{} : {}", language.tr("worst"), format_time(stats.slowest)));
+                ui.separator();
+                ui.label(format!("{} : {}", language.tr("average"), format_time(stats.average)));
+            });
+        }
+
+        if let Some(message) = &self.export_message {
+            ui.label(RichText::new(message).small().color(MUTED));
         }
 
         egui::ScrollArea::vertical()
@@ -411,9 +492,9 @@ impl Calibre60 {
                     .striped(true)
                     .spacing([22.0, 8.0])
                     .show(ui, |ui| {
-                        ui.strong("Tour");
-                        ui.strong("Durée du tour");
-                        ui.strong("Temps cumulé");
+                        ui.strong(language.tr("lap"));
+                        ui.strong(language.tr("lap_duration"));
+                        ui.strong(language.tr("cumulative"));
                         ui.end_row();
 
                         for index in (0..self.laps.len()).rev() {
@@ -431,6 +512,7 @@ impl Calibre60 {
                     });
             });
     }
+
 }
 
 impl eframe::App for Calibre60 {
@@ -470,6 +552,7 @@ impl eframe::App for Calibre60 {
             }
         }
 
+        let language = self.language;
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical()
                 .id_salt("main")
@@ -483,20 +566,31 @@ impl eframe::App for Calibre60 {
                                 .color(MUTED),
                         );
                     });
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        for option in Language::ALL {
+                            if ui
+                                .selectable_value(&mut self.language, option, option.short_label())
+                                .changed()
+                            {
+                                self.set_language(ctx, option);
+                            }
+                        }
+                    });
                     ui.add_space(10.0);
 
                     ui.horizontal_wrapped(|ui| {
                         ui.selectable_value(
                             &mut self.mode,
                             Mode::Stopwatch,
-                            "Chronomètre",
+                            language.tr("stopwatch"),
                         );
                         ui.selectable_value(
                             &mut self.mode,
                             Mode::Countdown,
-                            "Compte à rebours",
+                            language.tr("countdown"),
                         );
-                        if ui.checkbox(&mut self.sound, "Son").changed() {
+                        if ui.checkbox(&mut self.sound, language.tr("sound")).changed() {
                             self.alarm.send(AudioCommand::Sound(self.sound));
                         }
                     });
@@ -506,11 +600,11 @@ impl eframe::App for Calibre60 {
                     if self.finished {
                         ui.horizontal_wrapped(|ui| {
                             ui.label(
-                                RichText::new("TEMPS ÉCOULÉ")
+                                RichText::new(language.tr("time_up"))
                                     .strong()
                                     .color(ACCENT),
                             );
-                            if ui.button("Arrêter l’alarme").clicked() {
+                            if ui.button(language.tr("stop_alarm")).clicked() {
                                 self.acknowledge();
                             }
                         });
@@ -543,11 +637,11 @@ impl eframe::App for Calibre60 {
                                 ),
                         );
                         let status = if self.running() {
-                            "EN COURS"
+                            language.tr("running")
                         } else if self.mode == Mode::Countdown && self.finished {
-                            "TERMINÉ"
+                            language.tr("finished")
                         } else {
-                            "À L’ARRÊT"
+                            language.tr("stopped")
                         };
                         ui.label(RichText::new(status).size(11.0).color(MUTED));
                         let size = ui.available_width().min(520.0);
@@ -556,14 +650,14 @@ impl eframe::App for Calibre60 {
 
                     ui.horizontal_wrapped(|ui| {
                         let label = if self.running() {
-                            "Pause"
+                            language.tr("pause")
                         } else if self.mode == Mode::Countdown
                             && self.countdown.elapsed(Instant::now()) >= self.target
                             && !self.target.is_zero()
                         {
-                            "Relancer"
+                            language.tr("restart")
                         } else {
-                            "Démarrer / Reprendre"
+                            language.tr("start_resume")
                         };
                         let can_start =
                             self.mode == Mode::Stopwatch || !self.target.is_zero();
@@ -584,7 +678,7 @@ impl eframe::App for Calibre60 {
                             && ui
                                 .add_enabled(
                                     self.stopwatch.running(),
-                                    egui::Button::new("Tour"),
+                                    egui::Button::new(language.tr("lap")),
                                 )
                                 .clicked()
                         {
@@ -594,7 +688,7 @@ impl eframe::App for Calibre60 {
                         if ui
                             .add_enabled(
                                 !self.running(),
-                                egui::Button::new("Réinitialiser"),
+                                egui::Button::new(language.tr("reset")),
                             )
                             .clicked()
                         {
@@ -604,9 +698,7 @@ impl eframe::App for Calibre60 {
 
                     ui.add_space(5.0);
                     ui.label(
-                        RichText::new(
-                            "Espace : marche / pause · L : tour · R : remise à zéro à l’arrêt · Échap : alarme",
-                        )
+                        RichText::new(language.tr("shortcuts"))
                         .small()
                         .color(MUTED),
                     );
@@ -614,13 +706,11 @@ impl eframe::App for Calibre60 {
                     #[cfg(any(target_os = "linux", target_os = "windows"))]
                     if self.tray.is_some() {
                         ui.horizontal_wrapped(|ui| {
-                            if ui.button("Réduire en arrière-plan").clicked() {
+                            if ui.button(language.tr("background")).clicked() {
                                 self.send_to_background(ctx);
                             }
                             ui.label(
-                                RichText::new(
-                                    "Si un minuteur tourne, fermer la fenêtre le laisse actif dans la zone de notification.",
-                                )
+                                RichText::new(language.tr("background_info"))
                                 .small()
                                 .color(MUTED),
                             );
@@ -638,7 +728,7 @@ impl eframe::App for Calibre60 {
                     if let Some(error) = &self.audio_error {
                         ui.separator();
                         ui.colored_label(ACCENT, error);
-                        ui.small("L’alerte visuelle reste disponible.");
+                        ui.small(language.tr("visual_alert"));
                     }
                     ui.add_space(10.0);
                 });
