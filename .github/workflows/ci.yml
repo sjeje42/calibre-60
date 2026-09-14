@@ -32,13 +32,11 @@ jobs:
         run: cargo test --all-targets
       - name: Build release
         run: cargo build --release
-      - name: Upload executable and resolved dependencies
+      - name: Upload executable
         uses: actions/upload-artifact@v7
         with:
           name: calibre-60-debian13-x64
-          path: |
-            target/release/calibre-60
-            Cargo.lock
+          path: target/release/calibre-60
           if-no-files-found: error
 
   windows:
@@ -57,11 +55,9 @@ jobs:
         run: cargo test --all-targets
       - name: Build release
         run: cargo build --release
-      - name: Upload executable and resolved dependencies
+      - name: Upload executable
         uses: actions/upload-artifact@v7
         with:
           name: calibre-60-windows-x64
-          path: |
-            target/release/calibre-60.exe
-            Cargo.lock
+          path: target/release/calibre-60.exe
           if-no-files-found: error
