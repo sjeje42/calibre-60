@@ -3,7 +3,10 @@
 mod alarm;
 mod clock;
 mod dial;
+mod notifications;
 mod settings;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+mod tray;
 
 use alarm::{Alarm, AlarmConfig, AudioCommand};
 use clock::{format_time, Clock};
@@ -14,6 +17,8 @@ use settings::{
     MIN_ALARM_REPEAT_MS,
 };
 use std::time::{Duration, Instant};
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+use tray::{SystemTray, TrayAction};
 
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
@@ -53,6 +58,11 @@ struct Calibre60 {
     alarm_repeat_ms: u64,
     alarm: Alarm,
     audio_error: Option<String>,
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    tray: Option<SystemTray>,
+    tray_error: Option<String>,
+    backgrounded: bool,
+    quit_requested: bool,
 }
 
 impl Calibre60 {
@@ -78,6 +88,16 @@ impl Calibre60 {
         )));
         alarm.send(AudioCommand::Sound(preferences.sound));
 
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        let (tray, tray_error) = match SystemTray::new(cc.egui_ctx.clone()) {
+            Ok(tray) => (Some(tray), None),
+            Err(error) => (None, Some(error)),
+        };
+        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+        let tray_error = Some(String::from(
+            "La zone de notification n’est pas disponible sur cette plateforme.",
+        ));
+
         Self {
             mode: preferences.mode.into(),
             stopwatch: Clock::default(),
@@ -92,6 +112,11 @@ impl Calibre60 {
             alarm_repeat_ms: preferences.alarm_repeat_ms,
             alarm,
             audio_error: None,
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            tray,
+            tray_error,
+            backgrounded: false,
+            quit_requested: false,
         }
     }
 
@@ -325,6 +350,40 @@ impl Calibre60 {
             });
     }
 
+    fn send_to_background(&mut self, ctx: &egui::Context) {
+        self.backgrounded = true;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        #[cfg(target_os = "linux")]
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+    }
+
+    fn restore_from_background(&mut self, ctx: &egui::Context) {
+        self.backgrounded = false;
+        #[cfg(target_os = "linux")]
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    fn handle_tray_actions(&mut self, ctx: &egui::Context) {
+        let Some(tray) = self.tray.as_ref() else {
+            return;
+        };
+
+        let actions: Vec<_> = std::iter::from_fn(|| tray.try_action()).collect();
+        for action in actions {
+            match action {
+                TrayAction::Open => self.restore_from_background(ctx),
+                TrayAction::Toggle => self.toggle(),
+                TrayAction::Quit => {
+                    self.quit_requested = true;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            }
+        }
+    }
+
     fn lap_list(&self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.horizontal(|ui| {
             ui.label(RichText::new("TEMPS INTERMÉDIAIRES").strong());
@@ -376,6 +435,20 @@ impl Calibre60 {
 
 impl eframe::App for Calibre60 {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        self.handle_tray_actions(ctx);
+
+        let close_requested = ctx.input(|input| input.viewport().close_requested());
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        let can_background = self.tray.is_some();
+        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+        let can_background = false;
+
+        if close_requested && !self.quit_requested && self.running() && can_background {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.send_to_background(ctx);
+        }
+
         for error in self.alarm.errors.try_iter() {
             self.audio_error = Some(error);
         }
@@ -538,6 +611,26 @@ impl eframe::App for Calibre60 {
                         .color(MUTED),
                     );
 
+                    #[cfg(any(target_os = "linux", target_os = "windows"))]
+                    if self.tray.is_some() {
+                        ui.horizontal_wrapped(|ui| {
+                            if ui.button("Réduire en arrière-plan").clicked() {
+                                self.send_to_background(ctx);
+                            }
+                            ui.label(
+                                RichText::new(
+                                    "Si un minuteur tourne, fermer la fenêtre le laisse actif dans la zone de notification.",
+                                )
+                                .small()
+                                .color(MUTED),
+                            );
+                        });
+                    }
+
+                    if let Some(error) = &self.tray_error {
+                        ui.label(RichText::new(error).small().color(MUTED));
+                    }
+
                     if self.mode == Mode::Stopwatch {
                         ui.separator();
                         self.lap_list(ui, ctx);
@@ -553,6 +646,8 @@ impl eframe::App for Calibre60 {
 
         if self.stopwatch.running() || self.countdown.running() {
             ctx.request_repaint_after(Duration::from_millis(16));
+        } else if self.backgrounded {
+            ctx.request_repaint_after(Duration::from_millis(250));
         }
     }
 
