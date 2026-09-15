@@ -37,9 +37,9 @@ The [CI workflow](../../actions/workflows/ci.yml) checks formatting with `rustfm
 runs tests and builds Calibre 60 on Debian 13 and Windows. Check the latest run for the
 actual validation result.
 
-After a successful CI run, development builds remain available from the **Artifacts**
+After a successful CI run, development builds are available from the **Artifacts**
 section as `calibre-60-debian13-x64` and `calibre-60-windows-x64`.
-Access requires permission to this private repository.
+For normal installation, prefer the files attached to a tagged GitHub Release.
 
 When a `v*` tag is pushed, the release workflow automatically builds a **Debian 13
 `.deb` package**, a **Linux x64 `.tar.gz` archive**, and a **Windows x64 `.zip` archive**,
@@ -64,7 +64,7 @@ sudo apt install git curl ca-certificates build-essential pkg-config \
 Install a current stable Rust toolchain using [rustup](https://rustup.rs/).
 Restart the terminal afterwards if `cargo` is not found.
 
-Clone the repository using your configured GitHub authentication, then run:
+Clone the repository, then run:
 
 ```bash
 git clone https://github.com/sjeje42/calibre-60.git
@@ -190,7 +190,7 @@ cargo test --all-targets
 cargo build --release
 ```
 
-Direct dependency versions are pinned in `Cargo.toml`.
+`Cargo.lock` is committed so application builds use the same resolved dependency set.
 
 ## License
 
