@@ -4,6 +4,13 @@
 
 English · [Français](README.fr.md)
 
+[![Rust](https://img.shields.io/badge/Rust-stable-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![egui](https://img.shields.io/badge/egui-0.31.1-6A5ACD)](https://github.com/emilk/egui)
+[![Debian 13](https://img.shields.io/badge/Linux-Debian%2013-A81D33?logo=debian&logoColor=white)](https://www.debian.org/)
+[![Windows x64](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows/)
+[![CI](https://github.com/sjeje42/calibre-60/actions/workflows/ci.yml/badge.svg)](https://github.com/sjeje42/calibre-60/actions/workflows/ci.yml)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
+
 Calibre 60 combines an ivory dial, a sweeping seconds hand, a 30-minute subdial,
 and a digital hours/minutes/seconds/milliseconds display. It is built for Linux
 (including Debian 13) and Windows with egui/eframe and rodio.
