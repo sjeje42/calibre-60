@@ -4,6 +4,13 @@
 
 [English](README.md) · Français
 
+[![Rust](https://img.shields.io/badge/Rust-stable-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![egui](https://img.shields.io/badge/egui-0.31.1-6A5ACD)](https://github.com/emilk/egui)
+[![Debian 13](https://img.shields.io/badge/Linux-Debian%2013-A81D33?logo=debian&logoColor=white)](https://www.debian.org/)
+[![Windows x64](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows/)
+[![CI](https://github.com/sjeje42/calibre-60/actions/workflows/ci.yml/badge.svg)](https://github.com/sjeje42/calibre-60/actions/workflows/ci.yml)
+[![Licence : GPL-3.0](https://img.shields.io/badge/Licence-GPL--3.0-blue.svg)](LICENSE)
+
 Calibre 60 associe un cadran ivoire, une aiguille fluide des secondes, un petit
 compteur de 30 minutes et un affichage numérique heures/minutes/secondes/millisecondes.
 L'application est conçue pour Linux, notamment Debian 13, et Windows, avec
