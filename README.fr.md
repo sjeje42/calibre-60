@@ -39,9 +39,9 @@ La [compilation automatique](../../actions/workflows/ci.yml) contrôle le format
 les dépendances avec `cargo-audit`, puis lance les tests et compile le programme sous
 Debian 13 et Windows. Consulte le dernier lancement pour connaître son résultat réel.
 
-Après une exécution réussie, les fichiers de développement restent disponibles dans
-la section **Artifacts** : `calibre-60-debian13-x64` et `calibre-60-windows-x64`.
-Le téléchargement nécessite l'accès à ce dépôt privé.
+Après une exécution réussie, les builds de développement sont disponibles dans la
+section **Artifacts** : `calibre-60-debian13-x64` et `calibre-60-windows-x64`.
+Pour une installation normale, privilégie les fichiers joints à une GitHub Release taguée.
 
 Lorsqu'un tag `v*` est poussé, le workflow de publication construit automatiquement
 un paquet **`.deb` Debian 13**, une archive **Linux x64 `.tar.gz`**, une archive
@@ -68,7 +68,7 @@ sudo apt install git curl ca-certificates build-essential pkg-config \
 Installe ensuite une version stable récente de Rust avec [rustup](https://rustup.rs/).
 Rouvre ton terminal si la commande `cargo` n'est pas reconnue.
 
-Avec ton authentification GitHub déjà configurée :
+Clone le dépôt puis lance :
 
 ```bash
 git clone https://github.com/sjeje42/calibre-60.git
@@ -201,7 +201,7 @@ cargo test --all-targets
 cargo build --release
 ```
 
-Les versions des dépendances directes sont fixées dans `Cargo.toml`.
+`Cargo.lock` est versionné afin que les builds de l'application utilisent le même jeu de dépendances résolues.
 
 ## Licence
 
