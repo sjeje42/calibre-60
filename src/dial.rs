@@ -124,11 +124,7 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode, s
     );
     painter.circle_filled(center, radius * 1.07, palette.bezel);
     if style == DialStyle::Navy {
-        painter.circle_stroke(
-            center,
-            radius * 1.072,
-            Stroke::new(4.0 * scale, RACING_RED),
-        );
+        painter.circle_stroke(center, radius * 1.072, Stroke::new(4.0 * scale, RACING_RED));
     }
     painter.circle_filled(center, radius * 1.025, palette.face);
     painter.circle_stroke(center, radius * 0.985, Stroke::new(1.0_f32, palette.muted));
