@@ -11,8 +11,8 @@ English · [Français](README.fr.md)
 [![CI](https://github.com/sjeje42/calibre-60/actions/workflows/ci.yml/badge.svg)](https://github.com/sjeje42/calibre-60/actions/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
-Calibre 60 combines an ivory dial, a sweeping seconds hand, a 30-minute subdial,
-and a digital hours/minutes/seconds/milliseconds display. It is built for Linux
+Calibre 60 combines code-rendered classic ivory and navy-blue dials, a sweeping seconds hand,
+a 30-minute subdial, and a digital hours/minutes/seconds/milliseconds display. It is built for Linux
 (including Debian 13) and Windows with egui/eframe and rodio.
 
 The application interface can be switched instantly between **French and English**.
@@ -23,6 +23,8 @@ The selected language is saved between sessions.
 - Independent stopwatch and countdown: switching tabs does not stop either clock.
 - Start, pause, resume, reset, and millisecond display.
 - Compact mode for keeping the timer and essential controls in a small corner of the screen.
+- Persistent light/dark application themes and classic ivory/navy-blue dial styles.
+- Navy dial with a code-rendered yellow/red baton bezel around the 30-minute subdial; no raster dial assets.
 - Lap duration and cumulative time, newest lap first.
 - Lap analytics: best lap, slowest lap, and average lap time.
 - Copy lap data to the clipboard as semicolon-separated CSV.

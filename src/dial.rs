@@ -1,4 +1,4 @@
-use crate::app::Mode;
+use crate::{app::Mode, settings::DialStyle};
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Sense, Stroke, Vec2};
 use std::{
     f32::consts::{FRAC_PI_2, TAU},
@@ -9,6 +9,59 @@ pub const PAPER: Color32 = Color32::from_rgb(248, 246, 240);
 pub const INK: Color32 = Color32::from_rgb(35, 39, 43);
 pub const MUTED: Color32 = Color32::from_rgb(125, 127, 126);
 pub const ACCENT: Color32 = Color32::from_rgb(160, 52, 47);
+
+const NAVY: Color32 = Color32::from_rgb(7, 27, 52);
+const NAVY_SUBDIAL: Color32 = Color32::from_rgb(10, 39, 72);
+const NAVY_BEZEL: Color32 = Color32::from_rgb(14, 18, 25);
+const NAVY_MUTED: Color32 = Color32::from_rgb(157, 177, 199);
+const NAVY_FINE_TICK: Color32 = Color32::from_rgb(91, 119, 148);
+const RACING_YELLOW: Color32 = Color32::from_rgb(247, 196, 36);
+const RACING_RED: Color32 = Color32::from_rgb(222, 55, 48);
+
+#[derive(Clone, Copy)]
+struct DialPalette {
+    face: Color32,
+    bezel: Color32,
+    text: Color32,
+    muted: Color32,
+    fine_tick: Color32,
+    sub_face: Color32,
+    sub_text: Color32,
+    bezel_tick: Color32,
+    stopwatch_hand: Color32,
+    countdown_hand: Color32,
+}
+
+impl DialPalette {
+    fn for_style(style: DialStyle) -> Self {
+        match style {
+            DialStyle::Classic => Self {
+                face: PAPER,
+                bezel: INK,
+                text: INK,
+                muted: MUTED,
+                fine_tick: Color32::from_rgb(180, 177, 170),
+                sub_face: Color32::from_rgb(238, 235, 226),
+                sub_text: MUTED,
+                bezel_tick: PAPER,
+                stopwatch_hand: INK,
+                countdown_hand: ACCENT,
+            },
+            DialStyle::Navy => Self {
+                face: NAVY,
+                bezel: NAVY_BEZEL,
+                text: PAPER,
+                muted: NAVY_MUTED,
+                fine_tick: NAVY_FINE_TICK,
+                sub_face: NAVY_SUBDIAL,
+                sub_text: PAPER,
+                bezel_tick: PAPER,
+                stopwatch_hand: PAPER,
+                countdown_hand: RACING_RED,
+            },
+        }
+    }
+}
 
 fn radial(center: Pos2, radius: f32, turns: f64) -> Pos2 {
     let angle = (turns.rem_euclid(1.0) as f32) * TAU - FRAC_PI_2;
@@ -32,23 +85,45 @@ fn draw_hand(
     );
 }
 
-pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
+fn draw_navy_subdial_bezel(painter: &egui::Painter, center: Pos2, radius: f32, scale: f32) {
+    painter.circle_stroke(center, radius * 1.16, Stroke::new(1.2 * scale, NAVY_BEZEL));
+
+    // Motorsport-inspired railway bezel. Five batons of one colour form a
+    // sector, then the colour changes for the next sector.
+    for index in 0..60 {
+        let color = if (index / 5) % 2 == 0 {
+            RACING_YELLOW
+        } else {
+            RACING_RED
+        };
+        painter.line_segment(
+            [
+                radial(center, radius * 1.025, index as f64 / 60.0),
+                radial(center, radius * 1.14, index as f64 / 60.0),
+            ],
+            Stroke::new(3.2 * scale, color),
+        );
+    }
+}
+
+pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode, style: DialStyle) {
     let (response, painter) = ui.allocate_painter(Vec2::splat(size), Sense::hover());
     let center = response.rect.center();
     let radius = size * 0.405;
     let scale = size / 520.0;
     let seconds = duration.as_secs_f64();
+    let palette = DialPalette::for_style(style);
 
     painter.circle_filled(
         center + Vec2::new(0.0, 5.0 * scale),
         radius * 1.075,
-        Color32::from_black_alpha(16),
+        Color32::from_black_alpha(if style == DialStyle::Navy { 38 } else { 16 }),
     );
-    painter.circle_filled(center, radius * 1.07, INK);
-    painter.circle_filled(center, radius * 1.025, PAPER);
-    painter.circle_stroke(center, radius * 0.985, Stroke::new(1.0_f32, MUTED));
+    painter.circle_filled(center, radius * 1.07, palette.bezel);
+    painter.circle_filled(center, radius * 1.025, palette.face);
+    painter.circle_stroke(center, radius * 0.985, Stroke::new(1.0_f32, palette.muted));
 
-    // Alternating railway-style bezel.
+    // Alternating railway-style outer bezel.
     for index in 0..120 {
         if index % 2 == 0 {
             painter.line_segment(
@@ -56,7 +131,7 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
                     radial(center, radius * 1.035, index as f64 / 120.0),
                     radial(center, radius * 1.06, index as f64 / 120.0),
                 ],
-                Stroke::new(5.0 * scale, PAPER),
+                Stroke::new(5.0 * scale, palette.bezel_tick),
             );
         }
     }
@@ -80,9 +155,9 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
             Stroke::new(
                 if major { 2.0 * scale } else { 0.8 * scale },
                 if second {
-                    INK
+                    palette.text
                 } else {
-                    Color32::from_rgb(180, 177, 170)
+                    palette.fine_tick
                 },
             ),
         );
@@ -95,15 +170,20 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
             Align2::CENTER_CENTER,
             value.to_string(),
             FontId::proportional(23.0 * scale),
-            INK,
+            palette.text,
         );
     }
 
     // The small counter makes one full revolution in 30 minutes.
     let sub_center = center - Vec2::new(0.0, radius * 0.44);
     let sub_radius = radius * 0.245;
-    painter.circle_filled(sub_center, sub_radius, Color32::from_rgb(238, 235, 226));
-    painter.circle_stroke(sub_center, sub_radius, Stroke::new(1.0_f32, MUTED));
+    painter.circle_filled(sub_center, sub_radius, palette.sub_face);
+
+    if style == DialStyle::Navy {
+        draw_navy_subdial_bezel(&painter, sub_center, sub_radius, scale);
+    } else {
+        painter.circle_stroke(sub_center, sub_radius, Stroke::new(1.0_f32, palette.muted));
+    }
 
     for index in 0..30 {
         painter.line_segment(
@@ -113,9 +193,9 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
                     sub_radius * if index % 5 == 0 { 0.77 } else { 0.88 },
                     index as f64 / 30.0,
                 ),
-                radial(sub_center, sub_radius, index as f64 / 30.0),
+                radial(sub_center, sub_radius * 0.98, index as f64 / 30.0),
             ],
-            Stroke::new(0.9 * scale, MUTED),
+            Stroke::new(0.9 * scale, palette.muted),
         );
     }
 
@@ -126,7 +206,7 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
             Align2::CENTER_CENTER,
             value.to_string(),
             FontId::proportional(10.0 * scale),
-            MUTED,
+            palette.sub_text,
         );
     }
 
@@ -136,35 +216,35 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
         sub_radius * 0.77,
         (seconds % 1800.0) / 1800.0,
         2.0 * scale,
-        INK,
+        palette.text,
     );
-    painter.circle_filled(sub_center, 3.0 * scale, INK);
+    painter.circle_filled(sub_center, 3.0 * scale, palette.text);
 
     painter.text(
         center + Vec2::new(0.0, radius * 0.39),
         Align2::CENTER_CENTER,
         "CALIBRE 60",
         FontId::proportional(23.0 * scale),
-        INK,
+        palette.text,
     );
     painter.text(
         center + Vec2::new(0.0, radius * 0.58),
         Align2::CENTER_CENTER,
         "JÉRÔMELAB",
         FontId::proportional(11.0 * scale),
-        MUTED,
+        palette.muted,
     );
     painter.text(
         center + Vec2::new(0.0, radius * 0.69),
         Align2::CENTER_CENTER,
         "60 SECONDES / 30 MINUTES",
         FontId::proportional(8.0 * scale),
-        MUTED,
+        palette.muted,
     );
 
     let hand_color = match mode {
-        Mode::Stopwatch => INK,
-        Mode::Countdown => ACCENT,
+        Mode::Stopwatch => palette.stopwatch_hand,
+        Mode::Countdown => palette.countdown_hand,
     };
     draw_hand(
         &painter,
@@ -175,5 +255,5 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode) {
         hand_color,
     );
     painter.circle_filled(center, 8.0 * scale, hand_color);
-    painter.circle_filled(center, 2.4 * scale, PAPER);
+    painter.circle_filled(center, 2.4 * scale, palette.face);
 }

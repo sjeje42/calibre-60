@@ -11,8 +11,9 @@
 [![CI](https://github.com/sjeje42/calibre-60/actions/workflows/ci.yml/badge.svg)](https://github.com/sjeje42/calibre-60/actions/workflows/ci.yml)
 [![Licence : GPL-3.0](https://img.shields.io/badge/Licence-GPL--3.0-blue.svg)](LICENSE)
 
-Calibre 60 associe un cadran ivoire, une aiguille fluide des secondes, un petit
-compteur de 30 minutes et un affichage numérique heures/minutes/secondes/millisecondes.
+Calibre 60 propose des cadrans ivoire classique et bleu marine entièrement dessinés en code,
+une aiguille fluide des secondes, un petit compteur de 30 minutes et un affichage numérique
+heures/minutes/secondes/millisecondes.
 L'application est conçue pour Linux, notamment Debian 13, et Windows, avec
 egui/eframe et rodio.
 
@@ -24,6 +25,8 @@ La langue choisie est mémorisée entre les sessions.
 - Chronomètre et compte à rebours indépendants : changer d'onglet ne les arrête pas.
 - Démarrage, pause, reprise, remise à zéro et affichage des millisecondes.
 - Mode compact pour garder le temps et les commandes essentielles dans un coin de l'écran.
+- Thèmes d'interface clair/sombre et cadrans ivoire classique/bleu marine, tous persistants.
+- Cadran bleu marine avec bordure du compteur 30 minutes en bâtonnets jaunes et rouges, dessinée entièrement en code sans image matricielle.
 - Temps de chaque tour et temps cumulé, avec les tours les plus récents en premier.
 - Statistiques des tours : meilleur tour, plus lent et moyenne.
 - Copie des tours dans le presse-papiers au format CSV, séparateur point-virgule.

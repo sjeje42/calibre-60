@@ -4,13 +4,53 @@ use crate::dial::{draw_dial, ACCENT, INK, MUTED, PAPER};
 use crate::i18n::Language;
 use crate::laps;
 use crate::settings::{
-    split_duration, AlarmTone, Preferences, SavedMode, DEFAULT_PRESETS_MINUTES,
+    split_duration, AlarmTone, DialStyle, Preferences, SavedMode, UiTheme, DEFAULT_PRESETS_MINUTES,
     MAX_ALARM_REPEAT_MS, MIN_ALARM_REPEAT_MS,
 };
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 use crate::tray::{SystemTray, TrayAction};
 use eframe::egui::{self, Color32, RichText, Stroke, Vec2};
 use std::time::{Duration, Instant};
+
+const DARK_PANEL: Color32 = Color32::from_rgb(16, 21, 29);
+const DARK_EXTREME: Color32 = Color32::from_rgb(9, 13, 19);
+const DARK_FAINT: Color32 = Color32::from_rgb(24, 31, 42);
+const DARK_TEXT: Color32 = Color32::from_rgb(235, 239, 245);
+const DARK_MUTED: Color32 = Color32::from_rgb(163, 174, 188);
+
+fn theme_text(theme: UiTheme) -> Color32 {
+    match theme {
+        UiTheme::Light => INK,
+        UiTheme::Dark => DARK_TEXT,
+    }
+}
+
+fn theme_muted(theme: UiTheme) -> Color32 {
+    match theme {
+        UiTheme::Light => MUTED,
+        UiTheme::Dark => DARK_MUTED,
+    }
+}
+
+fn apply_ui_theme(ctx: &egui::Context, theme: UiTheme) {
+    let mut visuals = match theme {
+        UiTheme::Light => egui::Visuals::light(),
+        UiTheme::Dark => egui::Visuals::dark(),
+    };
+    visuals.override_text_color = Some(theme_text(theme));
+    visuals.panel_fill = match theme {
+        UiTheme::Light => PAPER,
+        UiTheme::Dark => DARK_PANEL,
+    };
+    visuals.window_fill = visuals.panel_fill;
+    if theme == UiTheme::Dark {
+        visuals.extreme_bg_color = DARK_EXTREME;
+        visuals.faint_bg_color = DARK_FAINT;
+    }
+    visuals.selection.bg_fill = ACCENT;
+    visuals.selection.stroke = Stroke::new(1.0_f32, Color32::WHITE);
+    ctx.set_visuals(visuals);
+}
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Mode {
@@ -50,6 +90,8 @@ pub(crate) struct Calibre60 {
     alarm_repeat_ms: u64,
     language: Language,
     presets_minutes: [u64; 5],
+    ui_theme: UiTheme,
+    dial_style: DialStyle,
     export_message: Option<String>,
     alarm: Alarm,
     audio_error: Option<String>,
@@ -64,19 +106,14 @@ pub(crate) struct Calibre60 {
 
 impl Calibre60 {
     pub(crate) fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let mut visuals = egui::Visuals::light();
-        visuals.override_text_color = Some(INK);
-        visuals.panel_fill = PAPER;
-        visuals.selection.bg_fill = ACCENT;
-        visuals.selection.stroke = Stroke::new(1.0_f32, Color32::WHITE);
-        cc.egui_ctx.set_visuals(visuals);
+        let preferences = Preferences::load(cc.storage);
+        apply_ui_theme(&cc.egui_ctx, preferences.ui_theme);
 
         let mut style = (*cc.egui_ctx.style()).clone();
         style.spacing.item_spacing = Vec2::new(10.0, 10.0);
         style.spacing.button_padding = Vec2::new(15.0, 10.0);
         cc.egui_ctx.set_style(style);
 
-        let preferences = Preferences::load(cc.storage);
         let alarm = Alarm::new(cc.egui_ctx.clone(), preferences.language);
         alarm.send(AudioCommand::Configure(AlarmConfig::new(
             preferences.alarm_tone,
@@ -107,6 +144,8 @@ impl Calibre60 {
             alarm_repeat_ms: preferences.alarm_repeat_ms,
             language: preferences.language,
             presets_minutes: preferences.presets_minutes,
+            ui_theme: preferences.ui_theme,
+            dial_style: preferences.dial_style,
             export_message: None,
             alarm,
             audio_error: None,
@@ -130,7 +169,14 @@ impl Calibre60 {
             alarm_repeat_ms: self.alarm_repeat_ms,
             language: self.language,
             presets_minutes: self.presets_minutes,
+            ui_theme: self.ui_theme,
+            dial_style: self.dial_style,
         }
+    }
+
+    fn set_ui_theme(&mut self, ctx: &egui::Context, theme: UiTheme) {
+        self.ui_theme = theme;
+        apply_ui_theme(ctx, theme);
     }
 
     fn set_language(&mut self, ctx: &egui::Context, language: Language) {
@@ -307,7 +353,7 @@ impl Calibre60 {
                     ui.label(
                         RichText::new(language.tr("presets_autosaved"))
                             .small()
-                            .color(MUTED),
+                            .color(theme_muted(self.ui_theme)),
                     );
                 });
         });
@@ -319,7 +365,7 @@ impl Calibre60 {
                 format_time(self.target)
             ))
             .small()
-            .color(MUTED),
+            .color(theme_muted(self.ui_theme)),
         );
     }
 
@@ -393,7 +439,7 @@ impl Calibre60 {
                         ui.label(
                             RichText::new(language.tr("enable_sound_test"))
                                 .small()
-                                .color(MUTED),
+                                .color(theme_muted(self.ui_theme)),
                         );
                     }
                 });
@@ -466,7 +512,7 @@ impl Calibre60 {
         let time_color = if self.mode == Mode::Countdown && self.finished {
             ACCENT
         } else {
-            INK
+            theme_text(self.ui_theme)
         };
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -568,7 +614,7 @@ impl Calibre60 {
         });
 
         if self.laps.is_empty() {
-            ui.label(RichText::new(language.tr("lap_hint")).color(MUTED));
+            ui.label(RichText::new(language.tr("lap_hint")).color(theme_muted(self.ui_theme)));
             return;
         }
 
@@ -595,7 +641,11 @@ impl Calibre60 {
         }
 
         if let Some(message) = &self.export_message {
-            ui.label(RichText::new(message).small().color(MUTED));
+            ui.label(
+                RichText::new(message)
+                    .small()
+                    .color(theme_muted(self.ui_theme)),
+            );
         }
 
         egui::ScrollArea::vertical()
@@ -679,7 +729,11 @@ impl eframe::App for Calibre60 {
                 ui.add_space(10.0);
                 ui.vertical_centered(|ui| {
                     ui.label(RichText::new("CALIBRE 60").size(24.0).strong());
-                    ui.label(RichText::new("J É R Ô M E L A B").size(11.0).color(MUTED));
+                    ui.label(
+                        RichText::new("J É R Ô M E L A B")
+                            .size(11.0)
+                            .color(theme_muted(self.ui_theme)),
+                    );
                 });
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
@@ -692,6 +746,41 @@ impl eframe::App for Calibre60 {
                         }
                     }
                 });
+                ui.add_space(6.0);
+
+                let mut selected_theme = self.ui_theme;
+                let mut selected_dial = self.dial_style;
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(format!("{} :", language.tr("appearance")));
+                    egui::ComboBox::from_id_salt("ui_theme")
+                        .selected_text(selected_theme.label(language))
+                        .show_ui(ui, |ui| {
+                            for theme in UiTheme::ALL {
+                                ui.selectable_value(
+                                    &mut selected_theme,
+                                    theme,
+                                    theme.label(language),
+                                );
+                            }
+                        });
+                    ui.separator();
+                    ui.label(format!("{} :", language.tr("dial_style")));
+                    egui::ComboBox::from_id_salt("dial_style")
+                        .selected_text(selected_dial.label(language))
+                        .show_ui(ui, |ui| {
+                            for style in DialStyle::ALL {
+                                ui.selectable_value(
+                                    &mut selected_dial,
+                                    style,
+                                    style.label(language),
+                                );
+                            }
+                        });
+                });
+                if selected_theme != self.ui_theme {
+                    self.set_ui_theme(ctx, selected_theme);
+                }
+                self.dial_style = selected_dial;
                 ui.add_space(10.0);
 
                 ui.horizontal_wrapped(|ui| {
@@ -734,7 +823,7 @@ impl eframe::App for Calibre60 {
                             .color(if self.mode == Mode::Countdown && self.finished {
                                 ACCENT
                             } else {
-                                INK
+                                theme_text(self.ui_theme)
                             }),
                     );
                     let status = if self.running() {
@@ -744,9 +833,13 @@ impl eframe::App for Calibre60 {
                     } else {
                         language.tr("stopped")
                     };
-                    ui.label(RichText::new(status).size(11.0).color(MUTED));
+                    ui.label(
+                        RichText::new(status)
+                            .size(11.0)
+                            .color(theme_muted(self.ui_theme)),
+                    );
                     let size = ui.available_width().min(520.0);
-                    draw_dial(ui, size, displayed, self.mode);
+                    draw_dial(ui, size, displayed, self.mode, self.dial_style);
                 });
 
                 ui.horizontal_wrapped(|ui| {
@@ -792,7 +885,11 @@ impl eframe::App for Calibre60 {
                 });
 
                 ui.add_space(5.0);
-                ui.label(RichText::new(language.tr("shortcuts")).small().color(MUTED));
+                ui.label(
+                    RichText::new(language.tr("shortcuts"))
+                        .small()
+                        .color(theme_muted(self.ui_theme)),
+                );
 
                 if ui.button(language.tr("compact_mode")).clicked() {
                     self.set_compact_mode(ctx, true);
@@ -807,13 +904,17 @@ impl eframe::App for Calibre60 {
                         ui.label(
                             RichText::new(language.tr("background_info"))
                                 .small()
-                                .color(MUTED),
+                                .color(theme_muted(self.ui_theme)),
                         );
                     });
                 }
 
                 if let Some(error) = &self.tray_error {
-                    ui.label(RichText::new(error).small().color(MUTED));
+                    ui.label(
+                        RichText::new(error)
+                            .small()
+                            .color(theme_muted(self.ui_theme)),
+                    );
                 }
 
                 if self.mode == Mode::Stopwatch {
