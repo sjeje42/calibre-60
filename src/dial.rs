@@ -10,13 +10,13 @@ pub const INK: Color32 = Color32::from_rgb(35, 39, 43);
 pub const MUTED: Color32 = Color32::from_rgb(125, 127, 126);
 pub const ACCENT: Color32 = Color32::from_rgb(160, 52, 47);
 
-const NAVY: Color32 = Color32::from_rgb(7, 27, 52);
-const NAVY_SUBDIAL: Color32 = Color32::from_rgb(10, 39, 72);
-const NAVY_BEZEL: Color32 = Color32::from_rgb(14, 18, 25);
-const NAVY_MUTED: Color32 = Color32::from_rgb(157, 177, 199);
-const NAVY_FINE_TICK: Color32 = Color32::from_rgb(91, 119, 148);
-const RACING_YELLOW: Color32 = Color32::from_rgb(247, 196, 36);
-const RACING_RED: Color32 = Color32::from_rgb(222, 55, 48);
+const NAVY: Color32 = Color32::from_rgb(18, 44, 78);
+const NAVY_SUBDIAL: Color32 = Color32::from_rgb(22, 53, 91);
+const NAVY_BEZEL: Color32 = Color32::from_rgb(14, 22, 34);
+const NAVY_MUTED: Color32 = Color32::from_rgb(170, 190, 211);
+const NAVY_FINE_TICK: Color32 = Color32::from_rgb(106, 139, 172);
+const RACING_YELLOW: Color32 = Color32::from_rgb(232, 190, 48);
+const RACING_RED: Color32 = Color32::from_rgb(210, 52, 43);
 
 #[derive(Clone, Copy)]
 struct DialPalette {
@@ -88,18 +88,21 @@ fn draw_hand(
 fn draw_navy_subdial_bezel(painter: &egui::Painter, center: Pos2, radius: f32, scale: f32) {
     painter.circle_stroke(center, radius * 1.16, Stroke::new(1.2 * scale, NAVY_BEZEL));
 
-    // Motorsport-inspired railway bezel. Five batons of one colour form a
-    // sector, then the colour changes for the next sector.
-    for index in 0..60 {
-        let color = if (index / 5) % 2 == 0 {
+    // Colour is deliberately limited to the small 30-minute counter:
+    // three quarters yellow, followed by one quarter red.
+    const TOTAL_TICKS: usize = 60;
+    const YELLOW_TICKS: usize = TOTAL_TICKS * 3 / 4;
+
+    for index in 0..TOTAL_TICKS {
+        let color = if index < YELLOW_TICKS {
             RACING_YELLOW
         } else {
             RACING_RED
         };
         painter.line_segment(
             [
-                radial(center, radius * 1.025, index as f64 / 60.0),
-                radial(center, radius * 1.14, index as f64 / 60.0),
+                radial(center, radius * 1.025, index as f64 / TOTAL_TICKS as f64),
+                radial(center, radius * 1.14, index as f64 / TOTAL_TICKS as f64),
             ],
             Stroke::new(3.2 * scale, color),
         );
@@ -123,7 +126,7 @@ pub fn draw_dial(ui: &mut egui::Ui, size: f32, duration: Duration, mode: Mode, s
     painter.circle_filled(center, radius * 1.025, palette.face);
     painter.circle_stroke(center, radius * 0.985, Stroke::new(1.0_f32, palette.muted));
 
-    // Alternating railway-style outer bezel.
+    // The main outer bezel keeps the original neutral railway treatment.
     for index in 0..120 {
         if index % 2 == 0 {
             painter.line_segment(
