@@ -1,0 +1,29 @@
+name: Apply v0.2.0 themes
+
+on:
+  push:
+    branches: [v0.2.0-themes]
+    paths:
+      - ".github/workflows/apply-v020-themes.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Apply v0.2.0 theme changes
+        run: python3 scripts/apply_v020_themes.py
+      - name: Format Rust sources
+        run: cargo fmt --all
+      - name: Keep workflow out of the bot commit
+        run: git checkout HEAD -- .github/workflows/apply-v020-themes.yml
+      - name: Commit implementation
+        run: |
+          git config user.name "Jérôme"
+          git config user.email "58558882+sjeje42@users.noreply.github.com"
+          git add -A
+          git commit -m "Add dark mode and navy chronograph theme"
+          git push
