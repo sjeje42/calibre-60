@@ -4,6 +4,13 @@ All notable changes to Calibre 60 will be documented in this file.
 
 ## Unreleased
 
+### Added for 0.2.0
+
+- Persistent light and dark application themes.
+- Persistent classic ivory and navy-blue dial styles.
+- Navy dial rendered entirely in code, with a yellow/red railway-style baton bezel around the 30-minute subdial.
+- Theme-aware text and secondary colours for comfortable contrast in dark mode.
+
 ## 0.1.0 — 2026-09-15
 
 ### Added

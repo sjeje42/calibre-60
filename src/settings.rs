@@ -16,6 +16,42 @@ pub enum SavedMode {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiTheme {
+    #[default]
+    Light,
+    Dark,
+}
+
+impl UiTheme {
+    pub const ALL: [Self; 2] = [Self::Light, Self::Dark];
+
+    pub fn label(self, language: Language) -> &'static str {
+        match self {
+            Self::Light => language.tr("light_mode"),
+            Self::Dark => language.tr("dark_mode"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DialStyle {
+    #[default]
+    Classic,
+    Navy,
+}
+
+impl DialStyle {
+    pub const ALL: [Self; 2] = [Self::Classic, Self::Navy];
+
+    pub fn label(self, language: Language) -> &'static str {
+        match self {
+            Self::Classic => language.tr("dial_classic"),
+            Self::Navy => language.tr("dial_navy"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AlarmTone {
     #[default]
     Classic,
@@ -48,6 +84,8 @@ pub struct Preferences {
     pub alarm_repeat_ms: u64,
     pub language: Language,
     pub presets_minutes: [u64; 5],
+    pub ui_theme: UiTheme,
+    pub dial_style: DialStyle,
 }
 
 impl Default for Preferences {
@@ -61,6 +99,8 @@ impl Default for Preferences {
             alarm_repeat_ms: 1_000,
             language: Language::French,
             presets_minutes: DEFAULT_PRESETS_MINUTES,
+            ui_theme: UiTheme::Light,
+            dial_style: DialStyle::Classic,
         }
     }
 }
@@ -114,6 +154,8 @@ mod tests {
         assert_eq!(preferences.alarm_repeat_ms, 1_000);
         assert_eq!(preferences.language, Language::French);
         assert_eq!(preferences.presets_minutes, [1, 3, 5, 10, 25]);
+        assert_eq!(preferences.ui_theme, UiTheme::Light);
+        assert_eq!(preferences.dial_style, DialStyle::Classic);
     }
 
     #[test]
