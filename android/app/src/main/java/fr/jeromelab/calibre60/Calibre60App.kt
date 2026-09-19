@@ -561,7 +561,14 @@ private fun BottomActionBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 10.dp, top = 10.dp, bottom = 14.dp),
+                .padding(
+                    PaddingValues(
+                        start = 10.dp,
+                        top = 10.dp,
+                        end = 10.dp,
+                        bottom = 14.dp,
+                    ),
+                ),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             val startText = when {
